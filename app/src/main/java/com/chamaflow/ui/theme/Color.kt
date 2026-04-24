@@ -1,0 +1,25 @@
+package com.chamaflow.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+val ChamaBlue       = Color(0xFF1A56DB)
+val ChamaBlueDark   = Color(0xFF1340A8)
+val ChamaBlueLight  = Color(0xFFE8F0FE)
+val ChamaGreen      = Color(0xFF0E9F6E)
+val ChamaGreenDark  = Color(0xFF057A55)
+val ChamaGreenLight = Color(0xFFDEF7EC)
+val ChamaGold       = Color(0xFFF59E0B)
+val ChamaGoldLight  = Color(0xFFFEF3C7)
+val ChamaRed        = Color(0xFFE02424)
+val ChamaRedLight   = Color(0xFFFDE8E8)
+val ChamaOrange     = Color(0xFFFF5A1F)
+val ChamaOrangeLight = Color(0xFFFFF3E0)
+val ChamaBackground = Color(0xFFF8FAFC)
+val ChamaSurface    = Color(0xFFFFFFFF)
+val ChamaOutline    = Color(0xFFE2E8F0)
+val ChamaTextPrimary   = Color(0xFF0F172A)
+val ChamaTextSecondary = Color(0xFF64748B)
+val ChamaTextMuted     = Color(0xFF94A3B8)
+val ChamaBackgroundDark = Color(0xFF0F172A)
+val ChamaSurfaceDark    = Color(0xFF1E293B)
+val ChamaOutlineDark    = Color(0xFF334155)

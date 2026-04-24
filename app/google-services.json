@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "1092129396915",
+    "firebase_url": "https://hospital-database-9ef77-default-rtdb.firebaseio.com",
+    "project_id": "hospital-database-9ef77",
+    "storage_bucket": "hospital-database-9ef77.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1092129396915:android:d99d061b33e021b42ab8c6",
+        "android_client_info": {
+          "package_name": "com.chamaflow"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDYR54zMCvYPeeIPJqZUUWWKebOxzypQls"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1092129396915:android:7cdf8c42fbe87f9c2ab8c6",
+        "android_client_info": {
+          "package_name": "com.example.hospitalmanagementsystemsam"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDYR54zMCvYPeeIPJqZUUWWKebOxzypQls"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
