@@ -17,12 +17,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.chamaflow.data.models.Member
 import com.chamaflow.data.models.MemberRole
 import com.chamaflow.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddMemberScreen(onBack: () -> Unit = {}, onSave: () -> Unit = {}) {
+fun AddMemberScreen(onBack: () -> Unit = {}, onSave: (Member) -> Unit = {}) {
     var fullName by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -41,8 +42,15 @@ fun AddMemberScreen(onBack: () -> Unit = {}, onSave: () -> Unit = {}) {
             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Surface(shape = CircleShape, color = ChamaBlueLight, modifier = Modifier.size(80.dp)) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        if (fullName.isNotEmpty()) Text(fullName.split(" ").take(2).joinToString("") { it.first().uppercase() }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = ChamaBlue)
-                        else Icon(Icons.Filled.Person, null, tint = ChamaBlue, modifier = Modifier.size(40.dp))
+                        if (fullName.isNotBlank()) {
+                            val initials = fullName.trim().split("\\s+".toRegex())
+                                .take(2)
+                                .mapNotNull { it.firstOrNull()?.toString()?.uppercase() }
+                                .joinToString("")
+                            Text(initials, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = ChamaBlue)
+                        } else {
+                            Icon(Icons.Filled.Person, null, tint = ChamaBlue, modifier = Modifier.size(40.dp))
+                        }
                     }
                 }
             }
@@ -64,7 +72,25 @@ fun AddMemberScreen(onBack: () -> Unit = {}, onSave: () -> Unit = {}) {
                 }
             }
             Spacer(Modifier.height(24.dp))
-            Button(onClick = { if (formValid) onSave() }, enabled = formValid, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(52.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = ChamaBlue, disabledContainerColor = ChamaOutline)) {
+            Button(
+                onClick = { 
+                    if (formValid) {
+                        val member = Member(
+                            fullName = fullName,
+                            phoneNumber = phone,
+                            email = email,
+                            nationalId = nationalId,
+                            role = role,
+                            joinDate = java.time.LocalDate.now().toString()
+                        )
+                        onSave(member)
+                    } 
+                }, 
+                enabled = formValid, 
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(52.dp), 
+                shape = RoundedCornerShape(12.dp), 
+                colors = ButtonDefaults.buttonColors(containerColor = ChamaBlue, disabledContainerColor = ChamaOutline)
+            ) {
                 Icon(Icons.Filled.PersonAdd, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add Member", fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(32.dp))

@@ -42,6 +42,7 @@ import com.chamaflow.ui.screens.reports.ReportsScreen
 import com.chamaflow.ui.theme.*
 import com.chamaflow.ui.viewmodel.AuthViewModel
 import com.chamaflow.ui.viewmodel.ChamaViewModel
+import com.chamaflow.ui.viewmodel.MembersViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -268,7 +269,14 @@ fun MainApp(
 
             // ── Detail screens ────────────────────────────────────────────────
             composable(Screen.AddMember.route) {
-                AddMemberScreen(onBack = { navController.popBackStack() }, onSave = { navController.popBackStack() })
+                val membersViewModel: MembersViewModel = hiltViewModel()
+                AddMemberScreen(
+                    onBack = { navController.popBackStack() }, 
+                    onSave = { member -> 
+                        membersViewModel.addMember(chamaId, member)
+                        navController.popBackStack()
+                    }
+                )
             }
             composable(Screen.MemberDetail.route) { back ->
                 MemberProfileScreen(memberId = back.arguments?.getString("memberId") ?: "", onBack = { navController.popBackStack() })

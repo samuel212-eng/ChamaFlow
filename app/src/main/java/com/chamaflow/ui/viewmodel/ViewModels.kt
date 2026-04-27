@@ -17,13 +17,34 @@ import javax.inject.Inject
 data class AuthUiState(val isLoading: Boolean = false, val isLoggedIn: Boolean = false, val user: FirebaseUser? = null, val errorMessage: String? = null, val successMessage: String? = null)
 
 @HiltViewModel
-class AuthViewModel @Inject constructor(private val repo: AuthRepository) : ViewModel() {
+class AuthViewModel @Inject constructor(
+    private val repo: AuthRepository,
+    private val prefs: com.chamaflow.data.preferences.UserPreferencesRepository
+) : ViewModel() {
     private val _ui = MutableStateFlow(AuthUiState()); val uiState = _ui.asStateFlow()
-    init { viewModelScope.launch { repo.currentUser.collect { user -> _ui.update { it.copy(user = user, isLoggedIn = user != null) } } } }
+    
+    init { 
+        viewModelScope.launch { 
+            repo.currentUser.collect { user -> 
+                _ui.update { it.copy(user = user, isLoggedIn = user != null) }
+                if (user != null) {
+                    val profile = repo.getUserProfile(user.uid)
+                    if (profile != null) {
+                        prefs.saveUserInfo(
+                            userId = user.uid,
+                            name = profile["fullName"] as? String ?: "",
+                            role = profile["role"] as? String ?: "MEMBER"
+                        )
+                    }
+                }
+            } 
+        } 
+    }
+
     fun login(email: String, password: String) { viewModelScope.launch { _ui.update { it.copy(isLoading = true, errorMessage = null) }; when (val r = repo.loginWithEmail(email, password)) { is AuthResult.Success -> _ui.update { it.copy(isLoading = false, user = r.data, isLoggedIn = true) }; is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }; else -> {} } } }
     fun register(email: String, password: String, name: String, phone: String) { viewModelScope.launch { _ui.update { it.copy(isLoading = true, errorMessage = null) }; when (val r = repo.registerWithEmail(email, password, name, phone)) { is AuthResult.Success -> _ui.update { it.copy(isLoading = false, user = r.data, isLoggedIn = true) }; is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }; else -> {} } } }
     fun sendPasswordReset(email: String) { viewModelScope.launch { _ui.update { it.copy(isLoading = true) }; when (val r = repo.sendPasswordResetEmail(email)) { is AuthResult.Success -> _ui.update { it.copy(isLoading = false, successMessage = "Reset link sent to $email") }; is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }; else -> {} } } }
-    fun logout() { repo.logout(); _ui.update { AuthUiState() } }
+    fun logout() { viewModelScope.launch { prefs.clearAll(); repo.logout(); _ui.update { AuthUiState() } } }
     fun clearError() { _ui.update { it.copy(errorMessage = null) } }
 }
 
@@ -43,6 +64,7 @@ class ChamaViewModel @Inject constructor(
             _ui.update { it.copy(isLoading = true, errorMessage = null) }
             when (val r = repo.createChama(chama)) {
                 is AuthResult.Success -> {
+                    // Update preferences so RootApp recomposes and switches to MainApp
                     prefs.saveActiveChamaId(r.data, chama.name)
                     _ui.update { it.copy(isLoading = false, successMessage = "Chama created!") }
                 }
