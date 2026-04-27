@@ -50,7 +50,7 @@ class AuthViewModel @Inject constructor(
 
 // ─── Chama ────────────────────────────────────────────────────────────────────
 
-data class ChamaUiState(val isLoading: Boolean = false, val successMessage: String? = null, val errorMessage: String? = null)
+data class ChamaUiState(val isLoading: Boolean = false, val successMessage: String? = null, val errorMessage: String? = null, val userChamas: List<Chama> = emptyList())
 
 @HiltViewModel
 class ChamaViewModel @Inject constructor(
@@ -59,12 +59,19 @@ class ChamaViewModel @Inject constructor(
 ) : ViewModel() {
     private val _ui = MutableStateFlow(ChamaUiState()); val uiState = _ui.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            repo.getUserChamasFlow().collect { chamas ->
+                _ui.update { it.copy(userChamas = chamas) }
+            }
+        }
+    }
+
     fun createChama(chama: Chama) {
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, errorMessage = null) }
             when (val r = repo.createChama(chama)) {
                 is AuthResult.Success -> {
-                    // Update preferences so RootApp recomposes and switches to MainApp
                     prefs.saveActiveChamaId(r.data, chama.name)
                     _ui.update { it.copy(isLoading = false, successMessage = "Chama created!") }
                 }
@@ -73,6 +80,13 @@ class ChamaViewModel @Inject constructor(
             }
         }
     }
+
+    fun selectChama(chamaId: String, chamaName: String) {
+        viewModelScope.launch {
+            prefs.saveActiveChamaId(chamaId, chamaName)
+        }
+    }
+
     fun clearMessages() { _ui.update { it.copy(errorMessage = null, successMessage = null) } }
 }
 
@@ -83,22 +97,47 @@ data class DashboardUiState(val stats: DashboardStats = DashboardStats(), val ch
 @HiltViewModel
 class DashboardViewModel @Inject constructor(private val membersRepo: MembersRepository, private val contribRepo: ContributionsRepository, private val loansRepo: LoansRepository, private val penaltiesRepo: PenaltiesRepository) : ViewModel() {
     private val _ui = MutableStateFlow(DashboardUiState()); val uiState = _ui.asStateFlow()
-    fun loadDashboard(chamaId: String, chamaName: String) {
+    fun loadDashboard(chamaId: String, chamaName: String, userId: String, userRole: String) {
         _ui.update { it.copy(chamaName = chamaName, isLoading = true) }
         viewModelScope.launch {
-            combine(membersRepo.getMembersFlow(chamaId), contribRepo.getContributionsForMonth(chamaId, currentMonth()), loansRepo.getLoansFlow(chamaId), penaltiesRepo.getPenaltiesFlow(chamaId)) { members, contributions, loans, penalties ->
-                val activeLoans = loans.filter { it.status == LoanStatus.ACTIVE || it.status == LoanStatus.OVERDUE }
-                DashboardStats(
-                    totalMembers = members.count { it.status == MemberStatus.ACTIVE },
-                    totalContributions = members.sumOf { it.totalContributions },
-                    totalLoansIssued = loans.sumOf { it.amount },
-                    totalLoanRepayments = loans.sumOf { it.amountPaid },
-                    totalPenaltiesCollected = penalties.filter { it.status == PenaltyStatus.PAID }.sumOf { it.amount },
-                    currentGroupBalance = members.sumOf { it.totalContributions } - activeLoans.sumOf { it.remainingBalance },
-                    activeLoans = activeLoans.size,
-                    overdueLoans = loans.count { it.status == LoanStatus.OVERDUE },
-                    recentContributions = contributions.take(5)
-                )
+            combine(
+                membersRepo.getMembersFlow(chamaId),
+                contribRepo.getContributionsForMonth(chamaId, currentMonth()),
+                loansRepo.getLoansFlow(chamaId),
+                penaltiesRepo.getPenaltiesFlow(chamaId)
+            ) { members, contributions, loans, penalties ->
+                if (userRole == "ADMIN" || userRole == "TREASURER") {
+                    val activeLoans = loans.filter { it.status == LoanStatus.ACTIVE || it.status == LoanStatus.OVERDUE }
+                    DashboardStats(
+                        totalMembers = members.count { it.status == MemberStatus.ACTIVE },
+                        totalContributions = members.sumOf { it.totalContributions },
+                        totalLoansIssued = loans.sumOf { it.amount },
+                        totalLoanRepayments = loans.sumOf { it.amountPaid },
+                        totalPenaltiesCollected = penalties.filter { it.status == PenaltyStatus.PAID }.sumOf { it.amount },
+                        currentGroupBalance = members.sumOf { it.totalContributions } - activeLoans.sumOf { it.remainingBalance },
+                        activeLoans = activeLoans.size,
+                        overdueLoans = loans.count { it.status == LoanStatus.OVERDUE },
+                        recentContributions = contributions.take(5)
+                    )
+                } else {
+                    // Member personal stats
+                    val myMember = members.find { it.userId == userId || it.id == userId }
+                    val myLoans = loans.filter { it.memberId == userId }
+                    val myActiveLoans = myLoans.filter { it.status == LoanStatus.ACTIVE || it.status == LoanStatus.OVERDUE }
+                    val myContribs = contributions.filter { it.memberId == userId }
+                    
+                    DashboardStats(
+                        totalMembers = members.count { it.status == MemberStatus.ACTIVE },
+                        totalContributions = myMember?.totalContributions ?: 0.0,
+                        totalLoansIssued = myLoans.sumOf { it.amount },
+                        totalLoanRepayments = myLoans.sumOf { it.amountPaid },
+                        totalPenaltiesCollected = myMember?.penaltiesOwed ?: 0.0, // For member, we use what they owe as a stat
+                        currentGroupBalance = myMember?.totalContributions ?: 0.0,
+                        activeLoans = myActiveLoans.size,
+                        overdueLoans = myLoans.count { it.status == LoanStatus.OVERDUE },
+                        recentContributions = myContribs
+                    )
+                }
             }.catch { e -> _ui.update { it.copy(isLoading = false, errorMessage = e.message) } }
              .collect { stats -> _ui.update { it.copy(stats = stats, isLoading = false) } }
         }

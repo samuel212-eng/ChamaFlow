@@ -30,6 +30,8 @@ import com.chamaflow.ui.viewmodel.DashboardViewModel
 fun DashboardScreen(
     chamaId: String,
     chamaName: String,
+    userId: String,
+    userRole: String,
     adminName: String,
     onNavigateToMembers: () -> Unit = {},
     onNavigateToContributions: () -> Unit = {},
@@ -37,12 +39,13 @@ fun DashboardScreen(
     onNavigateToMeetings: () -> Unit = {},
     onNavigateToReports: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(chamaId) {
-        viewModel.loadDashboard(chamaId, chamaName)
+        viewModel.loadDashboard(chamaId, chamaName, userId, userRole)
     }
 
     Scaffold(
@@ -73,7 +76,7 @@ fun DashboardScreen(
                             Icon(Icons.Outlined.Notifications, "Notifications", tint = Color.White)
                         }
                     }
-                    IconButton(onClick = {}) {
+                    IconButton(onClick = onNavigateToProfile) {
                         MemberAvatar(name = adminName, size = 34.dp, backgroundColor = Color.White.copy(alpha = 0.2f), textColor = Color.White)
                     }
                 },

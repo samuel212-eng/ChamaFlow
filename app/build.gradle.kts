@@ -14,7 +14,6 @@ android {
     defaultConfig {
         applicationId = "com.chamaflow"
         minSdk = 26
-        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
@@ -40,6 +39,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

@@ -16,29 +16,47 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.chamaflow.data.models.*
+import com.chamaflow.ui.components.MemberAvatar
 import com.chamaflow.ui.screens.members.ChamaTextField
 import com.chamaflow.ui.screens.members.FormSectionLabel
 import com.chamaflow.ui.theme.*
+import com.chamaflow.ui.viewmodel.LoansViewModel
+import com.chamaflow.ui.viewmodel.MembersViewModel
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 private val loanPurple = Color(0xFF6D28D9)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoanApplicationScreen(onBack: () -> Unit = {}, onSubmit: () -> Unit = {}) {
-    var selectedMember by remember { mutableStateOf("") }
+fun LoanApplicationScreen(
+    chamaId: String,
+    onBack: () -> Unit = {},
+    onSubmit: () -> Unit = {},
+    loansViewModel: LoansViewModel = hiltViewModel(),
+    membersViewModel: MembersViewModel = hiltViewModel()
+) {
+    val membersState by membersViewModel.uiState.collectAsState()
+    var selectedMember by remember { mutableStateOf<Member?>(null) }
     var memberDropdownOpen by remember { mutableStateOf(false) }
     var loanAmount by remember { mutableStateOf("") }
     var repaymentPeriod by remember { mutableStateOf("3") }
     var periodDropdownOpen by remember { mutableStateOf(false) }
     var purpose by remember { mutableStateOf("") }
-    val members = listOf("Select from your members list")
+    
     val periods = listOf("1", "2", "3", "4", "6", "9", "12")
     val interestRate = 0.10
     val amount = loanAmount.toDoubleOrNull() ?: 0.0
     val months = repaymentPeriod.toIntOrNull() ?: 3
     val totalRepayable = amount + (amount * interestRate)
     val monthlyInstallment = if (months > 0) totalRepayable / months else 0.0
-    val formValid = selectedMember.isNotEmpty() && amount > 0 && purpose.isNotEmpty()
+    val formValid = selectedMember != null && amount > 0 && purpose.isNotEmpty()
+
+    LaunchedEffect(chamaId) {
+        membersViewModel.loadMembers(chamaId)
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Loan Application", fontWeight = FontWeight.Bold, color = Color.White) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null, tint = Color.White) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = loanPurple)) },
@@ -56,9 +74,30 @@ fun LoanApplicationScreen(onBack: () -> Unit = {}, onSubmit: () -> Unit = {}) {
                 Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     FormSectionLabel("Loan Details")
                     ExposedDropdownMenuBox(expanded = memberDropdownOpen, onExpandedChange = { memberDropdownOpen = it }) {
-                        OutlinedTextField(value = selectedMember, onValueChange = {}, readOnly = true, label = { Text("Select Member *") }, leadingIcon = { Icon(Icons.Filled.Person, null, tint = ChamaTextSecondary) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = memberDropdownOpen) }, placeholder = { Text("Choose a member", color = ChamaTextMuted) }, modifier = Modifier.fillMaxWidth().menuAnchor(), shape = RoundedCornerShape(10.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = loanPurple, unfocusedBorderColor = ChamaOutline))
+                        OutlinedTextField(
+                            value = selectedMember?.fullName ?: "",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Select Member *") },
+                            leadingIcon = { if (selectedMember != null) MemberAvatar(name = selectedMember!!.fullName, size = 28.dp) else Icon(Icons.Filled.Person, null, tint = ChamaTextSecondary) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = memberDropdownOpen) },
+                            placeholder = { Text("Choose a member", color = ChamaTextMuted) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = loanPurple, unfocusedBorderColor = ChamaOutline)
+                        )
                         ExposedDropdownMenu(expanded = memberDropdownOpen, onDismissRequest = { memberDropdownOpen = false }) {
-                            members.forEach { DropdownMenuItem(text = { Text(it) }, onClick = { selectedMember = it; memberDropdownOpen = false }) }
+                            membersState.members.forEach { m ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            MemberAvatar(name = m.fullName, size = 28.dp)
+                                            Text(m.fullName)
+                                        }
+                                    },
+                                    onClick = { selectedMember = m; memberDropdownOpen = false }
+                                )
+                            }
                         }
                     }
                     ChamaTextField(loanAmount, { loanAmount = it.filter { c -> c.isDigit() } }, "Loan Amount (KES) *", "e.g. 20000", Icons.Filled.AttachMoney, keyboardType = KeyboardType.Number, isError = amount > 100_000, errorMessage = "Cannot exceed KES 100,000")
@@ -86,7 +125,30 @@ fun LoanApplicationScreen(onBack: () -> Unit = {}, onSubmit: () -> Unit = {}) {
                 }
             }
             Spacer(Modifier.height(24.dp))
-            Button(onClick = { if (formValid) onSubmit() }, enabled = formValid && amount <= 100_000, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(52.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = loanPurple, disabledContainerColor = ChamaOutline)) {
+            Button(
+                onClick = {
+                    if (formValid) {
+                        val loan = Loan(
+                            memberId = selectedMember!!.id,
+                            memberName = selectedMember!!.fullName,
+                            amount = amount,
+                            interestRate = interestRate,
+                            repaymentPeriodMonths = months,
+                            monthlyInstallment = monthlyInstallment,
+                            totalRepayable = totalRepayable,
+                            remainingBalance = totalRepayable,
+                            disbursedDate = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
+                            status = LoanStatus.PENDING
+                        )
+                        loansViewModel.applyForLoan(chamaId, loan)
+                        onSubmit()
+                    }
+                },
+                enabled = formValid && amount <= 100_000,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = loanPurple, disabledContainerColor = ChamaOutline)
+            ) {
                 Icon(Icons.Filled.Send, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Submit Application", fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(32.dp))

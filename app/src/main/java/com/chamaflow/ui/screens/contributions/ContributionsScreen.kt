@@ -23,6 +23,7 @@ import com.chamaflow.data.models.*
 import com.chamaflow.ui.components.*
 import com.chamaflow.ui.theme.*
 import com.chamaflow.ui.viewmodel.ContributionsViewModel
+import com.chamaflow.ui.viewmodel.MembersViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -31,9 +32,11 @@ import java.time.format.DateTimeFormatter
 fun ContributionsScreen(
     chamaId: String,
     defaultContributionAmount: Double = 5_000.0,
-    viewModel: ContributionsViewModel = hiltViewModel()
+    viewModel: ContributionsViewModel = hiltViewModel(),
+    membersViewModel: MembersViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val membersState by membersViewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSheet by remember { mutableStateOf(false) }
 
@@ -46,7 +49,10 @@ fun ContributionsScreen(
     }
     val tabs = listOf("All", "Paid", "Unpaid", "Overdue")
 
-    LaunchedEffect(chamaId) { viewModel.loadContributions(chamaId) }
+    LaunchedEffect(chamaId) { 
+        viewModel.loadContributions(chamaId)
+        membersViewModel.loadMembers(chamaId)
+    }
 
     LaunchedEffect(uiState.successMessage, uiState.errorMessage) {
         val msg = uiState.successMessage ?: uiState.errorMessage
@@ -190,6 +196,7 @@ fun ContributionsScreen(
         RecordContributionSheet(
             onDismiss = { showSheet = false },
             onSave = { contribution -> viewModel.recordContribution(chamaId, contribution) },
+            members = membersState.members,
             defaultAmount = defaultContributionAmount,
             currentMonth = uiState.selectedMonth
         )

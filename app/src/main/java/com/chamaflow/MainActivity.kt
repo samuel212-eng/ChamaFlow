@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
     lateinit var prefsRepository: UserPreferencesRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
@@ -78,16 +80,29 @@ fun RootApp(prefsRepository: UserPreferencesRepository) {
         prefs.activeChamaId.isEmpty() -> {
             val chamaViewModel: ChamaViewModel = hiltViewModel()
             val chamaState by chamaViewModel.uiState.collectAsState()
-            CreateChamaScreen(
-                onBack = { authViewModel.logout() },
-                onSave = { chama -> chamaViewModel.createChama(chama) },
-                isLoading = chamaState.isLoading,
-                errorMessage = chamaState.errorMessage
-            )
+            
+            if (chamaState.userChamas.isNotEmpty()) {
+                // User is in chamas but none active in prefs, pick first or show selector
+                LaunchedEffect(Unit) {
+                    val first = chamaState.userChamas.first()
+                    chamaViewModel.selectChama(first.id, first.name)
+                }
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    CircularProgressIndicator(color = ChamaBlue)
+                }
+            } else {
+                CreateChamaScreen(
+                    onBack = { authViewModel.logout() },
+                    onSave = { chama -> chamaViewModel.createChama(chama) },
+                    isLoading = chamaState.isLoading,
+                    errorMessage = chamaState.errorMessage
+                )
+            }
         }
         else -> MainApp(
             chamaId   = prefs.activeChamaId,
             chamaName = prefs.activeChamaName,
+            userId    = prefs.userId,
             userName  = prefs.userName,
             userRole  = prefs.userRole,
             onLogout  = {
@@ -157,11 +172,11 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onSend: (String) -> Unit, isLoading
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Enter your email and we'll send a reset link.", style = MaterialTheme.typography.bodyMedium, color = ChamaTextSecondary)
             successMessage?.let {
                 Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp), color = ChamaGreenLight) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Icon(Icons.Filled.CheckCircle, null, tint = ChamaGreen)
                         Text(it, style = MaterialTheme.typography.bodySmall, color = ChamaGreenDark)
                     }
@@ -196,6 +211,7 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onSend: (String) -> Unit, isLoading
 fun MainApp(
     chamaId: String,
     chamaName: String,
+    userId: String,
     userName: String,
     userRole: String,
     onLogout: () -> Unit
@@ -232,18 +248,20 @@ fun MainApp(
     ) { innerPadding ->
         NavHost(navController = navController, startDestination = Screen.Dashboard.route, modifier = Modifier.padding(innerPadding)) {
 
-            // ── Bottom nav tabs (all now receive chamaId) ─────────────────────
             composable(Screen.Dashboard.route) {
                 DashboardScreen(
                     chamaId = chamaId,
                     chamaName = chamaName,
+                    userId = userId,
+                    userRole = userRole,
                     adminName = userName,
                     onNavigateToMembers = { navController.navigate(Screen.Members.route) },
                     onNavigateToContributions = { navController.navigate(Screen.Contributions.route) },
                     onNavigateToLoans = { navController.navigate(Screen.Loans.route) },
                     onNavigateToMeetings = { navController.navigate(Screen.Meetings.route) },
                     onNavigateToReports = { navController.navigate(Screen.Reports.route) },
-                    onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) }
+                    onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
+                    onNavigateToProfile = { navController.navigate(Screen.Profile.route) }
                 )
             }
             composable(Screen.Members.route) {
@@ -282,7 +300,11 @@ fun MainApp(
                 MemberProfileScreen(memberId = back.arguments?.getString("memberId") ?: "", onBack = { navController.popBackStack() })
             }
             composable(Screen.AddLoan.route) {
-                LoanApplicationScreen(onBack = { navController.popBackStack() }, onSubmit = { navController.popBackStack() })
+                LoanApplicationScreen(
+                    chamaId = chamaId,
+                    onBack = { navController.popBackStack() },
+                    onSubmit = { navController.popBackStack() }
+                )
             }
             composable(Screen.LoanDetail.route) {
                 PlaceholderScreen("Loan Details") { navController.popBackStack() }
@@ -306,7 +328,7 @@ fun MainApp(
                 )
             }
             composable(Screen.Settings.route) {
-                ProfileScreen(  // Settings redirects to Profile for now
+                ProfileScreen(
                     onBack = { navController.popBackStack() },
                     onLogout = onLogout,
                     userName = userName,
