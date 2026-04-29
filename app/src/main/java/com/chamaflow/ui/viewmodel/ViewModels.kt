@@ -14,7 +14,15 @@ import javax.inject.Inject
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-data class AuthUiState(val isLoading: Boolean = false, val isLoggedIn: Boolean = false, val user: FirebaseUser? = null, val errorMessage: String? = null, val successMessage: String? = null)
+data class AuthUiState(
+    val isLoading: Boolean = true, 
+    val isLoggedIn: Boolean = false, 
+    val user: FirebaseUser? = null, 
+    val errorMessage: String? = null, 
+    val successMessage: String? = null,
+    val verificationId: String? = null,
+    val phoneNumber: String? = null
+)
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -26,7 +34,7 @@ class AuthViewModel @Inject constructor(
     init { 
         viewModelScope.launch { 
             repo.currentUser.collect { user -> 
-                _ui.update { it.copy(user = user, isLoggedIn = user != null) }
+                _ui.update { it.copy(user = user, isLoggedIn = user != null, isLoading = false) }
                 if (user != null) {
                     val profile = repo.getUserProfile(user.uid)
                     if (profile != null) {
@@ -43,26 +51,68 @@ class AuthViewModel @Inject constructor(
 
     fun login(email: String, password: String) { viewModelScope.launch { _ui.update { it.copy(isLoading = true, errorMessage = null) }; when (val r = repo.loginWithEmail(email, password)) { is AuthResult.Success -> _ui.update { it.copy(isLoading = false, user = r.data, isLoggedIn = true) }; is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }; else -> {} } } }
     fun register(email: String, password: String, name: String, phone: String) { viewModelScope.launch { _ui.update { it.copy(isLoading = true, errorMessage = null) }; when (val r = repo.registerWithEmail(email, password, name, phone)) { is AuthResult.Success -> _ui.update { it.copy(isLoading = false, user = r.data, isLoggedIn = true) }; is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }; else -> {} } } }
+    
+    fun sendOtp(phone: String, activity: android.app.Activity) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true, errorMessage = null, phoneNumber = phone) }
+            repo.sendPhoneOtp(phone, activity, object : com.google.firebase.auth.PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
+                    viewModelScope.launch {
+                        val r = repo.signInWithCredential(credential)
+                        if (r is AuthResult.Success) _ui.update { it.copy(isLoading = false, isLoggedIn = true) }
+                        else if (r is AuthResult.Error) _ui.update { it.copy(isLoading = false, errorMessage = r.message) }
+                    }
+                }
+                override fun onVerificationFailed(e: com.google.firebase.FirebaseException) {
+                    _ui.update { it.copy(isLoading = false, errorMessage = e.message) }
+                }
+                override fun onCodeSent(verificationId: String, token: com.google.firebase.auth.PhoneAuthProvider.ForceResendingToken) {
+                    _ui.update { it.copy(isLoading = false, successMessage = "OTP sent!", verificationId = verificationId) }
+                }
+            })
+        }
+    }
+
+    fun verifyOtp(otpCode: String) {
+        val vid = _ui.value.verificationId ?: return
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true, errorMessage = null) }
+            when (val r = repo.verifyOtp(vid, otpCode)) {
+                is AuthResult.Success -> _ui.update { it.copy(isLoading = false, isLoggedIn = true) }
+                is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }
+                else -> {}
+            }
+        }
+    }
+
     fun sendPasswordReset(email: String) { viewModelScope.launch { _ui.update { it.copy(isLoading = true) }; when (val r = repo.sendPasswordResetEmail(email)) { is AuthResult.Success -> _ui.update { it.copy(isLoading = false, successMessage = "Reset link sent to $email") }; is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }; else -> {} } } }
-    fun logout() { viewModelScope.launch { prefs.clearAll(); repo.logout(); _ui.update { AuthUiState() } } }
+    fun logout() { viewModelScope.launch { prefs.clearAll(); repo.logout(); _ui.update { AuthUiState(isLoading = false) } } }
     fun clearError() { _ui.update { it.copy(errorMessage = null) } }
+    fun clearMessages() { _ui.update { it.copy(errorMessage = null, successMessage = null) } }
 }
 
 // ─── Chama ────────────────────────────────────────────────────────────────────
 
-data class ChamaUiState(val isLoading: Boolean = false, val successMessage: String? = null, val errorMessage: String? = null, val userChamas: List<Chama> = emptyList())
+data class ChamaUiState(
+    val isLoading: Boolean = false, 
+    val successMessage: String? = null, 
+    val errorMessage: String? = null, 
+    val userChamas: List<Chama> = emptyList(), 
+    val searchResults: List<Chama> = emptyList(), 
+    val isSearching: Boolean = false
+)
 
 @HiltViewModel
 class ChamaViewModel @Inject constructor(
     private val repo: ChamaRepository,
     private val prefs: com.chamaflow.data.preferences.UserPreferencesRepository
 ) : ViewModel() {
-    private val _ui = MutableStateFlow(ChamaUiState()); val uiState = _ui.asStateFlow()
+    private val _ui = MutableStateFlow(ChamaUiState(isLoading = true)); val uiState = _ui.asStateFlow()
 
     init {
         viewModelScope.launch {
             repo.getUserChamasFlow().collect { chamas ->
-                _ui.update { it.copy(userChamas = chamas) }
+                _ui.update { it.copy(userChamas = chamas, isLoading = false) }
             }
         }
     }
@@ -81,9 +131,60 @@ class ChamaViewModel @Inject constructor(
         }
     }
 
+    fun searchChamas(query: String) {
+        if (query.length < 2) {
+            _ui.update { it.copy(searchResults = emptyList()) }
+            return
+        }
+        viewModelScope.launch {
+            _ui.update { it.copy(isSearching = true) }
+            when (val r = repo.searchChamas(query)) {
+                is AuthResult.Success -> _ui.update { it.copy(isSearching = false, searchResults = r.data) }
+                is AuthResult.Error -> _ui.update { it.copy(isSearching = false, errorMessage = r.message) }
+                else -> {}
+            }
+        }
+    }
+
+    fun requestToJoin(chamaId: String) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true, errorMessage = null) }
+            when (val r = repo.requestToJoin(chamaId)) {
+                is AuthResult.Success -> _ui.update { it.copy(isLoading = false, successMessage = "Join request sent!") }
+                is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }
+                else -> {}
+            }
+        }
+    }
+
+    fun joinChama(inviteCode: String) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true, errorMessage = null) }
+            when (val r = repo.joinChamaWithCode(inviteCode)) {
+                is AuthResult.Success -> {
+                    val chamaResult = repo.getChamaById(r.data)
+                    if (chamaResult is AuthResult.Success) {
+                        prefs.saveActiveChamaId(r.data, chamaResult.data.name)
+                        _ui.update { it.copy(isLoading = false, successMessage = "Joined ${chamaResult.data.name}!") }
+                    } else {
+                        _ui.update { it.copy(isLoading = false, errorMessage = "Joined but failed to load details.") }
+                    }
+                }
+                is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }
+                else -> {}
+            }
+        }
+    }
+
     fun selectChama(chamaId: String, chamaName: String) {
         viewModelScope.launch {
             prefs.saveActiveChamaId(chamaId, chamaName)
+        }
+    }
+
+    fun skipChamaSelection() {
+        viewModelScope.launch {
+            prefs.saveActiveChamaId("PERSONAL", "My Personal Savings")
         }
     }
 
@@ -92,14 +193,21 @@ class ChamaViewModel @Inject constructor(
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-data class DashboardUiState(val stats: DashboardStats = DashboardStats(), val chamaName: String = "", val isLoading: Boolean = false, val errorMessage: String? = null)
+data class DashboardUiState(val stats: DashboardStats = DashboardStats(), val chamaName: String = "", val inviteCode: String = "", val isLoading: Boolean = false, val errorMessage: String? = null)
 
 @HiltViewModel
-class DashboardViewModel @Inject constructor(private val membersRepo: MembersRepository, private val contribRepo: ContributionsRepository, private val loansRepo: LoansRepository, private val penaltiesRepo: PenaltiesRepository) : ViewModel() {
+class DashboardViewModel @Inject constructor(private val chamaRepo: ChamaRepository, private val membersRepo: MembersRepository, private val contribRepo: ContributionsRepository, private val loansRepo: LoansRepository, private val penaltiesRepo: PenaltiesRepository) : ViewModel() {
     private val _ui = MutableStateFlow(DashboardUiState()); val uiState = _ui.asStateFlow()
     fun loadDashboard(chamaId: String, chamaName: String, userId: String, userRole: String) {
         _ui.update { it.copy(chamaName = chamaName, isLoading = true) }
         viewModelScope.launch {
+            if (chamaId != "PERSONAL") {
+                val chamaInfo = chamaRepo.getChamaById(chamaId)
+                if (chamaInfo is AuthResult.Success) {
+                    _ui.update { it.copy(inviteCode = chamaInfo.data.inviteCode) }
+                }
+            }
+
             combine(
                 membersRepo.getMembersFlow(chamaId),
                 contribRepo.getContributionsForMonth(chamaId, currentMonth()),
@@ -127,11 +235,11 @@ class DashboardViewModel @Inject constructor(private val membersRepo: MembersRep
                     val myContribs = contributions.filter { it.memberId == userId }
                     
                     DashboardStats(
-                        totalMembers = members.count { it.status == MemberStatus.ACTIVE },
+                        totalMembers = if (chamaId == "PERSONAL") 1 else members.count { it.status == MemberStatus.ACTIVE },
                         totalContributions = myMember?.totalContributions ?: 0.0,
                         totalLoansIssued = myLoans.sumOf { it.amount },
                         totalLoanRepayments = myLoans.sumOf { it.amountPaid },
-                        totalPenaltiesCollected = myMember?.penaltiesOwed ?: 0.0, // For member, we use what they owe as a stat
+                        totalPenaltiesCollected = myMember?.penaltiesOwed ?: 0.0,
                         currentGroupBalance = myMember?.totalContributions ?: 0.0,
                         activeLoans = myActiveLoans.size,
                         overdueLoans = myLoans.count { it.status == LoanStatus.OVERDUE },
@@ -146,7 +254,7 @@ class DashboardViewModel @Inject constructor(private val membersRepo: MembersRep
 
 // ─── Members ──────────────────────────────────────────────────────────────────
 
-data class MembersUiState(val members: List<Member> = emptyList(), val isLoading: Boolean = false, val errorMessage: String? = null, val successMessage: String? = null, val searchQuery: String = "", val selectedFilter: String = "All") {
+data class MembersUiState(val members: List<Member> = emptyList(), val isLoading: Boolean = false, val errorMessage: String? = null, val successMessage: String? = null, val searchQuery: String = "", val selectedFilter: String = "All", val appUsers: List<Map<String, Any>> = emptyList()) {
     val filteredMembers get() = members.filter { m ->
         val s = m.fullName.contains(searchQuery, true) || m.phoneNumber.contains(searchQuery, true)
         val f = when (selectedFilter) { "Admin" -> m.role == MemberRole.ADMIN; "Treasurer" -> m.role == MemberRole.TREASURER; "Member" -> m.role == MemberRole.MEMBER && m.status == MemberStatus.ACTIVE; "Inactive" -> m.status == MemberStatus.INACTIVE; else -> true }
@@ -158,11 +266,18 @@ data class MembersUiState(val members: List<Member> = emptyList(), val isLoading
 }
 
 @HiltViewModel
-class MembersViewModel @Inject constructor(private val repo: MembersRepository) : ViewModel() {
+class MembersViewModel @Inject constructor(private val repo: MembersRepository, private val authRepo: AuthRepository) : ViewModel() {
     private val _ui = MutableStateFlow(MembersUiState()); val uiState = _ui.asStateFlow()
     fun loadMembers(chamaId: String) { viewModelScope.launch { _ui.update { it.copy(isLoading = true) }; repo.getMembersFlow(chamaId).catch { e -> _ui.update { it.copy(isLoading = false, errorMessage = e.message) } }.collect { members -> _ui.update { it.copy(members = members, isLoading = false) } } } }
     fun setSearchQuery(q: String) { _ui.update { it.copy(searchQuery = q) } }
     fun setFilter(f: String) { _ui.update { it.copy(selectedFilter = f) } }
+    fun searchAppUsers(query: String) {
+        if (query.length < 3) return
+        viewModelScope.launch {
+            // This is a mock search for now, ideally you'd search the 'users' collection
+            // but for safety/privacy reasons we might just search by specific email or phone
+        }
+    }
     fun addMember(chamaId: String, member: Member) { viewModelScope.launch { _ui.update { it.copy(isLoading = true) }; when (val r = repo.addMember(chamaId, member)) { is AuthResult.Success -> _ui.update { it.copy(isLoading = false, successMessage = "Member added") }; is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }; else -> {} } } }
     fun deleteMember(chamaId: String, memberId: String) { viewModelScope.launch { when (val r = repo.deleteMember(chamaId, memberId)) { is AuthResult.Success -> _ui.update { it.copy(successMessage = "Member removed") }; is AuthResult.Error -> _ui.update { it.copy(errorMessage = r.message) }; else -> {} } } }
     fun clearMessages() { _ui.update { it.copy(errorMessage = null, successMessage = null) } }
@@ -212,6 +327,16 @@ class LoansViewModel @Inject constructor(private val repo: LoansRepository) : Vi
     fun approveLoan(chamaId: String, loanId: String) { viewModelScope.launch { when (val r = repo.approveLoan(chamaId, loanId)) { is AuthResult.Success -> _ui.update { it.copy(successMessage = "Loan approved") }; is AuthResult.Error -> _ui.update { it.copy(errorMessage = r.message) }; else -> {} } } }
     fun rejectLoan(chamaId: String, loanId: String) { viewModelScope.launch { when (val r = repo.rejectLoan(chamaId, loanId)) { is AuthResult.Success -> _ui.update { it.copy(successMessage = "Loan rejected") }; is AuthResult.Error -> _ui.update { it.copy(errorMessage = r.message) }; else -> {} } } }
     fun applyForLoan(chamaId: String, loan: Loan) { viewModelScope.launch { when (val r = repo.applyForLoan(chamaId, loan)) { is AuthResult.Success -> _ui.update { it.copy(successMessage = "Application submitted") }; is AuthResult.Error -> _ui.update { it.copy(errorMessage = r.message) }; else -> {} } } }
+    fun recordRepayment(chamaId: String, loanId: String, amount: Double) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true) }
+            when (val r = repo.recordRepayment(chamaId, loanId, amount)) {
+                is AuthResult.Success -> _ui.update { it.copy(isLoading = false, successMessage = "Repayment recorded!") }
+                is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }
+                else -> {}
+            }
+        }
+    }
     fun clearMessages() { _ui.update { it.copy(errorMessage = null, successMessage = null) } }
 }
 

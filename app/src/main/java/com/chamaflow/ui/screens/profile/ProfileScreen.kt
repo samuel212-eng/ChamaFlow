@@ -1,25 +1,33 @@
 package com.chamaflow.ui.screens.profile
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.chamaflow.ui.components.MemberAvatar
 import com.chamaflow.ui.screens.members.ChamaTextField
 import com.chamaflow.ui.theme.*
@@ -30,11 +38,11 @@ import com.chamaflow.ui.viewmodel.AuthViewModel
 fun ProfileScreen(
     onBack: () -> Unit = {},
     onLogout: () -> Unit = {},
-    userName: String = "Sam Mwangi",
-    userEmail: String = "sam@example.com",
-    userPhone: String = "+254 712 345 678",
-    userRole: String = "Admin",
-    chamName: String = "Pamoja Savings Group",
+    userName: String = "User",
+    userEmail: String = "",
+    userPhone: String = "",
+    userRole: String = "Member",
+    chamName: String = "ChamaFlow Group",
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
     var isEditing by remember { mutableStateOf(false) }
@@ -42,13 +50,22 @@ fun ProfileScreen(
     var editPhone by remember { mutableStateOf(userPhone) }
     var showPasswordSheet by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        selectedImageUri = uri
+        // TODO: Upload to Firebase Storage and update profile
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Profile", fontWeight = FontWeight.Bold, color = Color.White) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null, tint = Color.White) } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
                 actions = {
                     TextButton(onClick = {
                         if (isEditing) {
@@ -77,7 +94,26 @@ fun ProfileScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MemberAvatar(name = editName, size = 80.dp, backgroundColor = Color.White.copy(alpha = 0.2f), textColor = Color.White)
+                    Box(contentAlignment = Alignment.BottomEnd) {
+                        if (selectedImageUri != null) {
+                            AsyncImage(
+                                model = selectedImageUri,
+                                contentDescription = "Profile Picture",
+                                modifier = Modifier.size(100.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            MemberAvatar(name = editName, size = 100.dp, backgroundColor = Color.White.copy(alpha = 0.2f), textColor = Color.White)
+                        }
+                        
+                        IconButton(
+                            onClick = { photoPickerLauncher.launch("image/*") },
+                            modifier = Modifier.size(32.dp).clip(CircleShape).background(ChamaBlueLight)
+                        ) {
+                            Icon(Icons.Filled.CameraAlt, "Change Photo", tint = ChamaBlue, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    
                     Text(editName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Surface(shape = RoundedCornerShape(20.dp), color = Color.White.copy(alpha = 0.2f)) {
@@ -101,9 +137,9 @@ fun ProfileScreen(
                 } else {
                     ProfileRow(Icons.Filled.Person, "Full Name", editName)
                     HorizontalDivider(color = ChamaOutline)
-                    ProfileRow(Icons.Filled.Email, "Email", userEmail)
+                    ProfileRow(Icons.Filled.Email, "Email", userEmail.ifEmpty { "Not set" })
                     HorizontalDivider(color = ChamaOutline)
-                    ProfileRow(Icons.Filled.Phone, "Phone", editPhone)
+                    ProfileRow(Icons.Filled.Phone, "Phone", editPhone.ifEmpty { "Not set" })
                     HorizontalDivider(color = ChamaOutline)
                     ProfileRow(Icons.Filled.Groups, "Chama", chamName)
                     HorizontalDivider(color = ChamaOutline)
@@ -158,7 +194,7 @@ fun ProfileScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(Icons.Filled.Logout, null, tint = ChamaRed)
+                    Icon(Icons.AutoMirrored.Filled.Logout, null, tint = ChamaRed)
                     Text("Sign Out", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = ChamaRed, modifier = Modifier.weight(1f))
                     Icon(Icons.Filled.ChevronRight, null, tint = ChamaRed)
                 }
@@ -180,7 +216,7 @@ fun ProfileScreen(
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            icon = { Icon(Icons.Filled.Logout, null, tint = ChamaRed) },
+            icon = { Icon(Icons.AutoMirrored.Filled.Logout, null, tint = ChamaRed) },
             title = { Text("Sign Out") },
             text = { Text("Are you sure you want to sign out of ChamaFlow?") },
             confirmButton = {

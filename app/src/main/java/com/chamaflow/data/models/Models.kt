@@ -6,7 +6,9 @@ data class Chama(
     val contributionAmount: Double = 0.0, val penaltyAmount: Double = 0.0,
     val joiningFee: Double = 0.0, val loanInterestRate: Double = 0.10,
     val meetingFrequency: MeetingFrequency = MeetingFrequency.MONTHLY,
-    val totalBalance: Double = 0.0, val memberCount: Int = 0, val createdAt: Long = 0L
+    val totalBalance: Double = 0.0, val memberCount: Int = 0, val createdAt: Long = 0L,
+    val inviteCode: String = "",
+    val joinRequests: List<String> = emptyList()
 )
 
 enum class MeetingFrequency { WEEKLY, BIWEEKLY, MONTHLY }

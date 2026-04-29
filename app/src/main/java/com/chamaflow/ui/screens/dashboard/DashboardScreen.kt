@@ -1,5 +1,6 @@
 package com.chamaflow.ui.screens.dashboard
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -43,6 +45,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(chamaId) {
         viewModel.loadDashboard(chamaId, chamaName, userId, userRole)
@@ -54,7 +57,7 @@ fun DashboardScreen(
                 title = {
                     Column {
                         Text(
-                            "ChamaFlow",
+                            if (chamaId == "PERSONAL") "My Savings" else chamaName,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -67,6 +70,19 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    if (userRole == "ADMIN" && chamaId != "PERSONAL") {
+                        IconButton(onClick = {
+                            val sendIntent: Intent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, "Join our Chama on ChamaFlow! Use Invite Code: ${uiState.inviteCode}")
+                                type = "text/plain"
+                            }
+                            val shareIntent = Intent.createChooser(sendIntent, null)
+                            context.startActivity(shareIntent)
+                        }) {
+                            Icon(Icons.Outlined.Share, "Share Invite", tint = Color.White)
+                        }
+                    }
                     IconButton(onClick = onNavigateToNotifications) {
                         BadgedBox(badge = {
                             if (uiState.stats.overdueLoans > 0) Badge(containerColor = ChamaGold) {
@@ -86,7 +102,7 @@ fun DashboardScreen(
         containerColor = ChamaBackground
     ) { padding ->
 
-        if (uiState.isLoading && uiState.stats.totalMembers == 0) {
+        if (uiState.isLoading && uiState.stats.totalMembers == 0 && chamaId != "PERSONAL") {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = ChamaBlue)
             }
@@ -99,10 +115,16 @@ fun DashboardScreen(
         ) {
             item {
                 BalanceBanner(
-                    chamaName = uiState.chamaName,
+                    chamaName = if (chamaId == "PERSONAL") "Personal Wallet" else uiState.chamaName,
                     balance = uiState.stats.currentGroupBalance,
-                    memberCount = uiState.stats.totalMembers
+                    memberCount = if (chamaId == "PERSONAL") 1 else uiState.stats.totalMembers
                 )
+            }
+
+            if (userRole == "ADMIN" && uiState.inviteCode.isNotEmpty()) {
+                item {
+                    InviteCodeCard(code = uiState.inviteCode)
+                }
             }
 
             item {
@@ -117,16 +139,18 @@ fun DashboardScreen(
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                SectionHeader(title = "Overview", actionLabel = "Reports", onAction = onNavigateToReports)
-                StatsGrid(stats = uiState.stats)
+                SectionHeader(title = if (userRole == "ADMIN") "Group Overview" else "My Overview", actionLabel = "Reports", onAction = onNavigateToReports)
+                StatsGrid(stats = uiState.stats, userRole = userRole)
             }
 
-            uiState.stats.upcomingMeeting?.let { meeting ->
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    SectionHeader(title = "Next Meeting", actionLabel = "All meetings", onAction = onNavigateToMeetings)
-                    UpcomingMeetingCard(meeting = meeting, onClick = onNavigateToMeetings)
-                    Spacer(modifier = Modifier.height(8.dp))
+            if (chamaId != "PERSONAL") {
+                uiState.stats.upcomingMeeting?.let { meeting ->
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        SectionHeader(title = "Next Meeting", actionLabel = "All meetings", onAction = onNavigateToMeetings)
+                        UpcomingMeetingCard(meeting = meeting, onClick = onNavigateToMeetings)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
 
@@ -139,7 +163,7 @@ fun DashboardScreen(
 
             if (uiState.stats.recentContributions.isNotEmpty()) {
                 item {
-                    SectionHeader(title = "Recent Contributions", actionLabel = "See all", onAction = onNavigateToContributions)
+                    SectionHeader(title = "Recent Transactions", actionLabel = "See all", onAction = onNavigateToContributions)
                 }
                 items(uiState.stats.recentContributions.take(4)) { contribution ->
                     Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
@@ -148,12 +172,12 @@ fun DashboardScreen(
                 }
             } else {
                 item {
-                    SectionHeader(title = "Recent Contributions", actionLabel = "Record", onAction = onNavigateToContributions)
+                    SectionHeader(title = "Recent Transactions", actionLabel = "Record", onAction = onNavigateToContributions)
                     EmptyState(
                         icon = Icons.Outlined.Savings,
-                        title = "No contributions yet",
-                        subtitle = "Start recording monthly contributions",
-                        actionLabel = "Record First Payment",
+                        title = "No savings yet",
+                        subtitle = "Start recording your first transaction",
+                        actionLabel = "Record Payment",
                         onAction = onNavigateToContributions
                     )
                 }
@@ -165,9 +189,30 @@ fun DashboardScreen(
 }
 
 @Composable
+private fun InviteCodeCard(code: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = ChamaBlueLight)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Group Invite Code", style = MaterialTheme.typography.labelSmall, color = ChamaBlue)
+                Text(code, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = ChamaBlueDark)
+            }
+            Icon(Icons.Filled.ContentCopy, "Copy", tint = ChamaBlue, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
 private fun QuickActionsRow(onContribute: () -> Unit, onLoan: () -> Unit, onReport: () -> Unit, onMeeting: () -> Unit) {
     val actions = listOf(
-        Triple(Icons.Filled.Add, "Contribute", onContribute),
+        Triple(Icons.Filled.Add, "Save", onContribute),
         Triple(Icons.Filled.RequestPage, "Loan", onLoan),
         Triple(Icons.Filled.BarChart, "Reports", onReport),
         Triple(Icons.Filled.EventNote, "Meeting", onMeeting),
@@ -192,14 +237,23 @@ private fun QuickActionsRow(onContribute: () -> Unit, onLoan: () -> Unit, onRepo
 }
 
 @Composable
-private fun StatsGrid(stats: DashboardStats) {
+private fun StatsGrid(stats: DashboardStats, userRole: String) {
     data class Item(val title: String, val value: String, val icon: ImageVector, val bg: Color, val tint: Color, val sub: String?)
-    val items = listOf(
-        Item("Total Members", "${stats.totalMembers}", Icons.Filled.Group, ChamaBlueLight, ChamaBlue, "Active"),
-        Item("Total Savings", "KES ${fmt(stats.totalContributions)}", Icons.Filled.Savings, ChamaGreenLight, ChamaGreen, "This year"),
-        Item("Loans Issued", "KES ${fmt(stats.totalLoansIssued)}", Icons.Filled.AccountBalance, ChamaGoldLight, ChamaGold, "${stats.activeLoans} active"),
-        Item("Penalties", "KES ${fmt(stats.totalPenaltiesCollected)}", Icons.Filled.Warning, ChamaRedLight, ChamaRed, "Collected"),
-    )
+    val items = if (userRole == "ADMIN") {
+        listOf(
+            Item("Total Members", "${stats.totalMembers}", Icons.Filled.Group, ChamaBlueLight, ChamaBlue, "Active"),
+            Item("Group Savings", "KES ${fmt(stats.totalContributions)}", Icons.Filled.Savings, ChamaGreenLight, ChamaGreen, "This year"),
+            Item("Loans Issued", "KES ${fmt(stats.totalLoansIssued)}", Icons.Filled.AccountBalance, ChamaGoldLight, ChamaGold, "${stats.activeLoans} active"),
+            Item("Penalties", "KES ${fmt(stats.totalPenaltiesCollected)}", Icons.Filled.Warning, ChamaRedLight, ChamaRed, "Collected"),
+        )
+    } else {
+        listOf(
+            Item("My Savings", "KES ${fmt(stats.totalContributions)}", Icons.Filled.Savings, ChamaGreenLight, ChamaGreen, "Total"),
+            Item("My Loans", "KES ${fmt(stats.totalLoansIssued - stats.totalLoanRepayments)}", Icons.Filled.AccountBalance, ChamaGoldLight, ChamaGold, "${stats.activeLoans} unpaid"),
+            Item("My Penalties", "KES ${fmt(stats.totalPenaltiesCollected)}", Icons.Filled.Warning, ChamaRedLight, ChamaRed, "Owed"),
+            Item("Status", "Active", Icons.Filled.CheckCircle, ChamaBlueLight, ChamaBlue, "Member"),
+        )
+    }
     Column(modifier = Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

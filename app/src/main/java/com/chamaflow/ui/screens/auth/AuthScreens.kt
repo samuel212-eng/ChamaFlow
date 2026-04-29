@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -39,6 +40,7 @@ fun LoginScreen(
     onLoginSuccess: (String, String) -> Unit,
     onNavigateToRegister: () -> Unit = {},
     onNavigateToForgotPassword: () -> Unit = {},
+    onContinueWithPhone: (String) -> Unit = {},
     isLoading: Boolean = false,
     errorMessage: String? = null
 ) {
@@ -64,8 +66,9 @@ fun LoginScreen(
                     Text("Forgot password?", style = MaterialTheme.typography.labelMedium, color = ChamaBlue, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.End).clickable { onNavigateToForgotPassword() })
                     AuthButton("Sign In", isLoading, formValid) { onLoginSuccess(email, password) }
                     AuthDivider()
+                    // If phone is entered in the email field or just a shortcut to register with phone
                     OutlinedButton(onClick = onNavigateToRegister, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(12.dp)) {
-                        Icon(Icons.Filled.Phone, null, tint = ChamaTextSecondary, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Continue with Phone Number", color = ChamaTextSecondary)
+                        Icon(Icons.Filled.Phone, null, tint = ChamaTextSecondary, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Register with Email & Phone", color = ChamaTextSecondary)
                     }
                 }
             }
@@ -122,7 +125,7 @@ fun RegisterScreen(
 }
 
 @Composable
-fun OtpVerificationScreen(phoneNumber: String = "", onVerified: () -> Unit = {}, onBack: () -> Unit = {}, isLoading: Boolean = false, isError: Boolean = false) {
+fun OtpVerificationScreen(phoneNumber: String = "", onVerified: (String) -> Unit = {}, onBack: () -> Unit = {}, isLoading: Boolean = false, isError: Boolean = false) {
     var otp by remember { mutableStateOf("") }
     var timer by remember { mutableIntStateOf(60) }
     var canResend by remember { mutableStateOf(false) }
@@ -133,7 +136,7 @@ fun OtpVerificationScreen(phoneNumber: String = "", onVerified: () -> Unit = {},
     Box(modifier = Modifier.fillMaxSize().background(authGradient)) {
         Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(56.dp))
-            Row(modifier = Modifier.fillMaxWidth()) { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null, tint = Color.White) } }
+            Row(modifier = Modifier.fillMaxWidth()) { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } }
             Spacer(Modifier.height(24.dp))
             AuthLogo(); Spacer(Modifier.height(16.dp))
             Text("Verify Your Number", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
@@ -152,7 +155,7 @@ fun OtpVerificationScreen(phoneNumber: String = "", onVerified: () -> Unit = {},
                         }
                     }
                     if (isError) Text("Invalid code. Try again.", style = MaterialTheme.typography.bodySmall, color = ChamaRed)
-                    AuthButton("Verify", isLoading, otp.length == 6) { onVerified() }
+                    AuthButton("Verify", isLoading, otp.length == 6) { onVerified(otp) }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("Didn't receive code?", style = MaterialTheme.typography.bodySmall, color = ChamaTextSecondary)
                         if (canResend) TextButton(onClick = { otp = ""; timer = 60; canResend = false }) { Text("Resend OTP", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = ChamaBlue) }
@@ -185,7 +188,7 @@ private fun AuthErrorBanner(message: String) {
 
 @Composable
 private fun AuthField(value: String, onValueChange: (String) -> Unit, label: String, icon: ImageVector, keyboardType: KeyboardType = KeyboardType.Text, isError: Boolean = false, errorMsg: String = "") {
-    OutlinedTextField(value = value, onValueChange = onValueChange, label = { Text(label) }, leadingIcon = { Icon(icon, null, tint = ChamaTextSecondary) }, keyboardOptions = KeyboardOptions(keyboardType = keyboardType), isError = isError, supportingText = if (isError && errorMsg.isNotEmpty()) { { Text(errorMsg, color = ChamaRed) } } else null, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ChamaBlue, unfocusedBorderColor = ChamaOutline))
+    OutlinedTextField(value = value, onValueChange = onValueChange, label = { Text(label) }, leadingIcon = { Icon(icon, null, tint = ChamaTextSecondary) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text), isError = isError, supportingText = if (isError && errorMsg.isNotEmpty()) { { Text(errorMsg, color = ChamaRed) } } else null, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ChamaBlue, unfocusedBorderColor = ChamaOutline))
 }
 
 @Composable

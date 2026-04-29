@@ -6,9 +6,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +29,7 @@ import com.chamaflow.ui.navigation.bottomNavItems
 import com.chamaflow.ui.screens.auth.LoginScreen
 import com.chamaflow.ui.screens.auth.OtpVerificationScreen
 import com.chamaflow.ui.screens.auth.RegisterScreen
+import com.chamaflow.ui.screens.chama.ChamaSelectionScreen
 import com.chamaflow.ui.screens.chama.CreateChamaScreen
 import com.chamaflow.ui.screens.contributions.ContributionsScreen
 import com.chamaflow.ui.screens.dashboard.DashboardScreen
@@ -59,7 +62,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             ChamaFlowTheme {
-                RootApp(prefsRepository)
+                RootApp(prefsRepository, this)
             }
         }
     }
@@ -68,36 +71,24 @@ class MainActivity : ComponentActivity() {
 // ─── Root: auth gate ──────────────────────────────────────────────────────────
 
 @Composable
-fun RootApp(prefsRepository: UserPreferencesRepository) {
+fun RootApp(prefsRepository: UserPreferencesRepository, activity: android.app.Activity) {
     val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.uiState.collectAsState()
     val prefs by prefsRepository.userPreferences.collectAsState(
         initial = com.chamaflow.data.preferences.UserPreferences()
     )
 
+    if (authState.isLoading && !authState.isLoggedIn && authState.verificationId == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = ChamaBlue)
+        }
+        return
+    }
+
     when {
-        !authState.isLoggedIn -> AuthFlow(authViewModel)
+        !authState.isLoggedIn -> AuthFlow(authViewModel, activity)
         prefs.activeChamaId.isEmpty() -> {
-            val chamaViewModel: ChamaViewModel = hiltViewModel()
-            val chamaState by chamaViewModel.uiState.collectAsState()
-            
-            if (chamaState.userChamas.isNotEmpty()) {
-                // User is in chamas but none active in prefs, pick first or show selector
-                LaunchedEffect(Unit) {
-                    val first = chamaState.userChamas.first()
-                    chamaViewModel.selectChama(first.id, first.name)
-                }
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    CircularProgressIndicator(color = ChamaBlue)
-                }
-            } else {
-                CreateChamaScreen(
-                    onBack = { authViewModel.logout() },
-                    onSave = { chama -> chamaViewModel.createChama(chama) },
-                    isLoading = chamaState.isLoading,
-                    errorMessage = chamaState.errorMessage
-                )
-            }
+            ChamaOnboardingFlow(authViewModel)
         }
         else -> MainApp(
             chamaId   = prefs.activeChamaId,
@@ -112,12 +103,54 @@ fun RootApp(prefsRepository: UserPreferencesRepository) {
     }
 }
 
+@Composable
+fun ChamaOnboardingFlow(authViewModel: AuthViewModel) {
+    val chamaViewModel: ChamaViewModel = hiltViewModel()
+    val chamaState by chamaViewModel.uiState.collectAsState()
+    var showCreateScreen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(chamaState.userChamas) {
+        // Automatically enter the first chama if the user is already a member
+        if (chamaState.userChamas.isNotEmpty()) {
+            val first = chamaState.userChamas.first()
+            chamaViewModel.selectChama(first.id, first.name)
+        }
+    }
+
+    if (chamaState.isLoading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = ChamaBlue)
+        }
+    } else if (showCreateScreen) {
+        CreateChamaScreen(
+            onBack = { showCreateScreen = false },
+            onSave = { chama -> chamaViewModel.createChama(chama) },
+            isLoading = chamaState.isLoading,
+            errorMessage = chamaState.errorMessage
+        )
+    } else {
+        ChamaSelectionScreen(
+            onCreateNew = { showCreateScreen = true },
+            onJoinExisting = { code -> chamaViewModel.joinChama(code) },
+            onLogout = { authViewModel.logout() },
+            onSkip = { chamaViewModel.skipChamaSelection() },
+            viewModel = chamaViewModel
+        )
+    }
+}
+
 // ─── Auth flow ────────────────────────────────────────────────────────────────
 
 @Composable
-fun AuthFlow(authViewModel: AuthViewModel) {
+fun AuthFlow(authViewModel: AuthViewModel, activity: android.app.Activity) {
     val authState by authViewModel.uiState.collectAsState()
     val navController = rememberNavController()
+
+    LaunchedEffect(authState.verificationId) {
+        if (authState.verificationId != null) {
+            navController.navigate("otp")
+        }
+    }
 
     NavHost(navController = navController, startDestination = "login") {
         composable("login") {
@@ -125,6 +158,7 @@ fun AuthFlow(authViewModel: AuthViewModel) {
                 onLoginSuccess = { email, password -> authViewModel.login(email, password) },
                 onNavigateToRegister = { navController.navigate("register") },
                 onNavigateToForgotPassword = { navController.navigate("forgot") },
+                onContinueWithPhone = { phone: String -> authViewModel.sendOtp(phone, activity) },
                 isLoading = authState.isLoading,
                 errorMessage = authState.errorMessage
             )
@@ -139,11 +173,13 @@ fun AuthFlow(authViewModel: AuthViewModel) {
                 errorMessage = authState.errorMessage
             )
         }
-        composable("otp/{phone}") { back ->
+        composable("otp") {
             OtpVerificationScreen(
-                phoneNumber = back.arguments?.getString("phone") ?: "",
-                onVerified = {},
-                onBack = { navController.popBackStack() }
+                phoneNumber = authState.phoneNumber ?: "",
+                onVerified = { otp: String -> authViewModel.verifyOtp(otp) },
+                onBack = { navController.popBackStack() },
+                isLoading = authState.isLoading,
+                isError = authState.errorMessage != null
             )
         }
         composable("forgot") {
@@ -167,7 +203,7 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onSend: (String) -> Unit, isLoading
         topBar = {
             TopAppBar(
                 title = { Text("Reset Password", fontWeight = FontWeight.Bold, color = Color.White) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null, tint = Color.White) } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ChamaBlue)
             )
         }
@@ -289,6 +325,7 @@ fun MainApp(
             composable(Screen.AddMember.route) {
                 val membersViewModel: MembersViewModel = hiltViewModel()
                 AddMemberScreen(
+                    chamaId = chamaId,
                     onBack = { navController.popBackStack() }, 
                     onSave = { member -> 
                         membersViewModel.addMember(chamaId, member)
@@ -297,7 +334,11 @@ fun MainApp(
                 )
             }
             composable(Screen.MemberDetail.route) { back ->
-                MemberProfileScreen(memberId = back.arguments?.getString("memberId") ?: "", onBack = { navController.popBackStack() })
+                MemberProfileScreen(
+                    chamaId = chamaId,
+                    memberId = back.arguments?.getString("memberId") ?: "", 
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable(Screen.AddLoan.route) {
                 LoanApplicationScreen(
@@ -349,12 +390,12 @@ private fun PlaceholderScreen(title: String, onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text(title, fontWeight = FontWeight.Bold, color = Color.White) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null, tint = Color.White) } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ChamaBlue)
             )
         }
     ) { padding ->
-        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
             Text("$title — coming soon", color = ChamaTextSecondary)
         }
     }

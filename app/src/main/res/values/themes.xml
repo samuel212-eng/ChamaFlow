@@ -7,7 +7,7 @@
 
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#0F62FE</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_round</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_chama_house</item>
         <item name="postSplashScreenTheme">@style/Theme.ChamaFlow</item>
     </style>
 </resources>

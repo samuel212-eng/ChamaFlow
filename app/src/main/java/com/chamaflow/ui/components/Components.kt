@@ -5,10 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -16,6 +17,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -108,7 +110,7 @@ fun ContributionRow(contribution: Contribution, onClick: () -> Unit = {}) {
 }
 
 @Composable
-fun LoanProgressCard(loan: Loan, onClick: () -> Unit = {}) {
+fun LoanProgressCard(loan: Loan, onClick: () -> Unit = {}, onRepay: (() -> Unit)? = null) {
     val progress = if (loan.totalRepayable > 0) (loan.amountPaid / loan.totalRepayable).toFloat().coerceIn(0f, 1f) else 0f
     Card(modifier = Modifier.fillMaxWidth().clickable { onClick() }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -138,6 +140,19 @@ fun LoanProgressCard(loan: Loan, onClick: () -> Unit = {}) {
                     Text("KES ${"%,.0f".format(loan.amountPaid)} paid", style = MaterialTheme.typography.labelSmall, color = ChamaGreen, fontWeight = FontWeight.SemiBold)
                 }
                 LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)), color = if (loan.status == LoanStatus.OVERDUE) ChamaRed else ChamaGreen, trackColor = ChamaOutline)
+            }
+            
+            if (onRepay != null && loan.status != LoanStatus.REPAID) {
+                Button(
+                    onClick = onRepay,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ChamaGreen)
+                ) {
+                    Icon(Icons.Filled.Payments, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Repay Loan")
+                }
             }
         }
     }
