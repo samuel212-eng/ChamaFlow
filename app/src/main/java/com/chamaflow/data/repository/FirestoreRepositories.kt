@@ -110,6 +110,15 @@ class LoansRepository @Inject constructor(private val db: FirebaseFirestore) {
         awaitClose { l.remove() }
     }
 
+    fun getMemberLoans(chamaId: String, memberId: String): Flow<List<Loan>> = callbackFlow {
+        val l = col(chamaId).whereEqualTo("memberId", memberId)
+            .addSnapshotListener { snap, e ->
+                if (e != null) { close(e); return@addSnapshotListener }
+                trySend(snap?.documents?.mapNotNull { it.toObject(Loan::class.java)?.copy(id = it.id) } ?: emptyList())
+            }
+        awaitClose { l.remove() }
+    }
+
     suspend fun applyForLoan(chamaId: String, loan: Loan): FirestoreResult<String> = try {
         val ref = col(chamaId).document()
         ref.set(loan.copy(id = ref.id, status = LoanStatus.PENDING)).await()
@@ -131,7 +140,8 @@ class LoansRepository @Inject constructor(private val db: FirebaseFirestore) {
         db.runTransaction { tx ->
             val snap = tx.get(ref)
             val paid = (snap.getDouble("amountPaid") ?: 0.0) + amount
-            val remaining = ((snap.getDouble("totalRepayable") ?: 0.0) - paid).coerceAtLeast(0.0)
+            val total = snap.getDouble("totalRepayable") ?: 0.0
+            val remaining = (total - paid).coerceAtLeast(0.0)
             val status = if (remaining <= 0) LoanStatus.REPAID.name else snap.getString("status")
             tx.update(ref, mapOf("amountPaid" to paid, "remainingBalance" to remaining, "status" to status))
         }.await()
@@ -154,6 +164,15 @@ class PenaltiesRepository @Inject constructor(private val db: FirebaseFirestore)
         awaitClose { l.remove() }
     }
 
+    fun getMemberPenalties(chamaId: String, memberId: String): Flow<List<Penalty>> = callbackFlow {
+        val l = col(chamaId).whereEqualTo("memberId", memberId)
+            .addSnapshotListener { snap, e ->
+                if (e != null) { close(e); return@addSnapshotListener }
+                trySend(snap?.documents?.mapNotNull { it.toObject(Penalty::class.java)?.copy(id = it.id) } ?: emptyList())
+            }
+        awaitClose { l.remove() }
+    }
+
     suspend fun issuePenalty(chamaId: String, penalty: Penalty): FirestoreResult<String> = try {
         val ref = col(chamaId).document()
         ref.set(penalty.copy(id = ref.id)).await(); AuthResult.Success(ref.id)
@@ -163,4 +182,154 @@ class PenaltiesRepository @Inject constructor(private val db: FirebaseFirestore)
         col(chamaId).document(penaltyId).update("status", PenaltyStatus.PAID.name).await()
         AuthResult.Success(Unit)
     } catch (e: Exception) { AuthResult.Error("Failed to mark paid: ${e.message}") }
+}
+
+// ── Investments ───────────────────────────────────────────────────────────────
+
+@Singleton
+class InvestmentsRepository @Inject constructor(private val db: FirebaseFirestore) {
+    private fun col(chamaId: String) = db.collection("chamas").document(chamaId).collection("investments")
+
+    fun getInvestmentsFlow(chamaId: String): Flow<List<Investment>> = callbackFlow {
+        val l = col(chamaId).orderBy("dateInvested", Query.Direction.DESCENDING)
+            .addSnapshotListener { snap, e ->
+                if (e != null) { close(e); return@addSnapshotListener }
+                trySend(snap?.documents?.mapNotNull { it.toObject(Investment::class.java)?.copy(id = it.id) } ?: emptyList())
+            }
+        awaitClose { l.remove() }
+    }
+
+    suspend fun addInvestment(chamaId: String, investment: Investment): FirestoreResult<String> = try {
+        val ref = col(chamaId).document()
+        ref.set(investment.copy(id = ref.id)).await(); AuthResult.Success(ref.id)
+    } catch (e: Exception) { AuthResult.Error("Failed to add: ${e.message}") }
+
+    suspend fun distributeDividends(chamaId: String, distribution: DividendDistribution): FirestoreResult<Unit> = try {
+        val ref = db.collection("chamas").document(chamaId).collection("dividend_distributions").document()
+        db.runTransaction { tx ->
+            tx.set(ref, distribution.copy(id = ref.id))
+            // Update investment total distributed
+            val invRef = col(chamaId).document(distribution.investmentId)
+            val current = tx.get(invRef).getDouble("totalDividendsDistributed") ?: 0.0
+            tx.update(invRef, "totalDividendsDistributed", current + distribution.totalAmount)
+        }.await()
+        AuthResult.Success(Unit)
+    } catch (e: Exception) { AuthResult.Error("Distribution failed: ${e.message}") }
+}
+
+// ── Merry Go Round ────────────────────────────────────────────────────────────
+
+@Singleton
+class MerryGoRoundRepository @Inject constructor(private val db: FirebaseFirestore) {
+    private fun col(chamaId: String) = db.collection("chamas").document(chamaId).collection("merry_go_rounds")
+
+    fun getMerryGoRoundsFlow(chamaId: String): Flow<List<MerryGoRound>> = callbackFlow {
+        val l = col(chamaId).addSnapshotListener { snap, e ->
+            if (e != null) { close(e); return@addSnapshotListener }
+            trySend(snap?.documents?.mapNotNull { it.toObject(MerryGoRound::class.java)?.copy(id = it.id) } ?: emptyList())
+        }
+        awaitClose { l.remove() }
+    }
+
+    suspend fun createMerryGoRound(chamaId: String, mgr: MerryGoRound): FirestoreResult<String> = try {
+        val ref = col(chamaId).document()
+        ref.set(mgr.copy(id = ref.id)).await(); AuthResult.Success(ref.id)
+    } catch (e: Exception) { AuthResult.Error("Failed to create: ${e.message}") }
+
+    suspend fun recordPayout(chamaId: String, payout: MerryGoRoundPayout): FirestoreResult<Unit> = try {
+        val ref = db.collection("chamas").document(chamaId).collection("merry_go_round_payouts").document()
+        db.runTransaction { tx ->
+            tx.set(ref, payout.copy(id = ref.id))
+            // Advance the index in the merry go round
+            val mgrRef = col(chamaId).document(payout.merryGoRoundId)
+            val snap = tx.get(mgrRef).toObject(MerryGoRound::class.java)
+            if (snap != null) {
+                val nextIndex = (snap.currentIndex + 1) % snap.rotationOrder.size
+                tx.update(mgrRef, "currentIndex", nextIndex)
+            }
+        }.await()
+        AuthResult.Success(Unit)
+    } catch (e: Exception) { AuthResult.Error("Payout failed: ${e.message}") }
+
+    fun getPayoutsFlow(chamaId: String, mgrId: String): Flow<List<MerryGoRoundPayout>> = callbackFlow {
+        val l = db.collection("chamas").document(chamaId).collection("merry_go_round_payouts")
+            .whereEqualTo("merryGoRoundId", mgrId)
+            .orderBy("datePaid", Query.Direction.DESCENDING)
+            .addSnapshotListener { snap, e ->
+                if (e != null) { close(e); return@addSnapshotListener }
+                trySend(snap?.documents?.mapNotNull { it.toObject(MerryGoRoundPayout::class.java)?.copy(id = it.id) } ?: emptyList())
+            }
+        awaitClose { l.remove() }
+    }
+}
+
+// ── Welfare Fund ──────────────────────────────────────────────────────────────
+
+@Singleton
+class WelfareRepository @Inject constructor(private val db: FirebaseFirestore) {
+    private fun col(chamaId: String) = db.collection("chamas").document(chamaId).collection("welfare")
+
+    fun getWelfareFundFlow(chamaId: String): Flow<WelfareFund?> = callbackFlow {
+        val l = col(chamaId).document("main").addSnapshotListener { snap, e ->
+            if (e != null) { close(e); return@addSnapshotListener }
+            trySend(snap?.toObject(WelfareFund::class.java))
+        }
+        awaitClose { l.remove() }
+    }
+
+    suspend fun updateWelfareRules(chamaId: String, amount: Double, rules: String): FirestoreResult<Unit> = try {
+        col(chamaId).document("main").set(
+            mapOf("contributionAmount" to amount, "rules" to rules, "chamaId" to chamaId),
+            com.google.firebase.firestore.SetOptions.merge()
+        ).await()
+        AuthResult.Success(Unit)
+    } catch (e: Exception) { AuthResult.Error("Failed to update: ${e.message}") }
+
+    fun getWelfareContributionsFlow(chamaId: String): Flow<List<WelfareContribution>> = callbackFlow {
+        val l = db.collection("chamas").document(chamaId).collection("welfare_contributions")
+            .orderBy("date", Query.Direction.DESCENDING)
+            .addSnapshotListener { snap, e ->
+                if (e != null) { close(e); return@addSnapshotListener }
+                trySend(snap?.documents?.mapNotNull { it.toObject(WelfareContribution::class.java)?.copy(id = it.id) } ?: emptyList())
+            }
+        awaitClose { l.remove() }
+    }
+
+    fun getWelfareDisbursementsFlow(chamaId: String): Flow<List<WelfareDisbursement>> = callbackFlow {
+        val l = db.collection("chamas").document(chamaId).collection("welfare_disbursements")
+            .orderBy("date", Query.Direction.DESCENDING)
+            .addSnapshotListener { snap, e ->
+                if (e != null) { close(e); return@addSnapshotListener }
+                trySend(snap?.documents?.mapNotNull { it.toObject(WelfareDisbursement::class.java)?.copy(id = it.id) } ?: emptyList())
+            }
+        awaitClose { l.remove() }
+    }
+
+    suspend fun recordWelfareContribution(chamaId: String, contribution: WelfareContribution): FirestoreResult<Unit> = try {
+        db.runTransaction { tx ->
+            val ref = db.collection("chamas").document(chamaId).collection("welfare_contributions").document()
+            tx.set(ref, contribution.copy(id = ref.id))
+            
+            val fundRef = col(chamaId).document("main")
+            val currentBalance = tx.get(fundRef).getDouble("totalBalance") ?: 0.0
+            tx.update(fundRef, "totalBalance", currentBalance + contribution.amount)
+            
+            val memberRef = db.collection("chamas").document(chamaId).collection("members").document(contribution.memberId)
+            val currentWelfare = tx.get(memberRef).getDouble("welfareBalance") ?: 0.0
+            tx.update(memberRef, "welfareBalance", currentWelfare + contribution.amount)
+        }.await()
+        AuthResult.Success(Unit)
+    } catch (e: Exception) { AuthResult.Error("Failed to record: ${e.message}") }
+
+    suspend fun recordWelfareDisbursement(chamaId: String, disbursement: WelfareDisbursement): FirestoreResult<Unit> = try {
+        db.runTransaction { tx ->
+            val ref = db.collection("chamas").document(chamaId).collection("welfare_disbursements").document()
+            tx.set(ref, disbursement.copy(id = ref.id))
+            
+            val fundRef = col(chamaId).document("main")
+            val currentBalance = tx.get(fundRef).getDouble("totalBalance") ?: 0.0
+            tx.update(fundRef, "totalBalance", (currentBalance - disbursement.amount).coerceAtLeast(0.0))
+        }.await()
+        AuthResult.Success(Unit)
+    } catch (e: Exception) { AuthResult.Error("Failed to record: ${e.message}") }
 }

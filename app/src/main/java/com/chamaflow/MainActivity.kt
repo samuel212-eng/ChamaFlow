@@ -33,16 +33,19 @@ import com.chamaflow.ui.screens.chama.ChamaSelectionScreen
 import com.chamaflow.ui.screens.chama.CreateChamaScreen
 import com.chamaflow.ui.screens.contributions.ContributionsScreen
 import com.chamaflow.ui.screens.dashboard.DashboardScreen
+import com.chamaflow.ui.screens.investments.InvestmentsScreen
 import com.chamaflow.ui.screens.loans.LoanApplicationScreen
 import com.chamaflow.ui.screens.loans.LoansScreen
 import com.chamaflow.ui.screens.meetings.MeetingsScreen
 import com.chamaflow.ui.screens.members.AddMemberScreen
 import com.chamaflow.ui.screens.members.MemberProfileScreen
 import com.chamaflow.ui.screens.members.MembersScreen
+import com.chamaflow.ui.screens.merrygoround.MerryGoRoundScreen
 import com.chamaflow.ui.screens.notifications.NotificationsScreen
 import com.chamaflow.ui.screens.penalties.PenaltiesScreen
 import com.chamaflow.ui.screens.profile.ProfileScreen
 import com.chamaflow.ui.screens.reports.ReportsScreen
+import com.chamaflow.ui.screens.welfare.WelfareScreen
 import com.chamaflow.ui.theme.*
 import com.chamaflow.ui.viewmodel.AuthViewModel
 import com.chamaflow.ui.viewmodel.ChamaViewModel
@@ -297,7 +300,10 @@ fun MainApp(
                     onNavigateToMeetings = { navController.navigate(Screen.Meetings.route) },
                     onNavigateToReports = { navController.navigate(Screen.Reports.route) },
                     onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
-                    onNavigateToProfile = { navController.navigate(Screen.Profile.route) }
+                    onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
+                    onNavigateToInvestments = { navController.navigate(Screen.Investments.route) },
+                    onNavigateToMerryGoRound = { navController.navigate(Screen.MerryGoRound.route) },
+                    onNavigateToWelfare = { navController.navigate(Screen.Welfare.route) }
                 )
             }
             composable(Screen.Members.route) {
@@ -323,12 +329,10 @@ fun MainApp(
 
             // ── Detail screens ────────────────────────────────────────────────
             composable(Screen.AddMember.route) {
-                val membersViewModel: MembersViewModel = hiltViewModel()
                 AddMemberScreen(
                     chamaId = chamaId,
                     onBack = { navController.popBackStack() }, 
                     onSave = { member -> 
-                        membersViewModel.addMember(chamaId, member)
                         navController.popBackStack()
                     }
                 )
@@ -364,6 +368,8 @@ fun MainApp(
                     onBack = { navController.popBackStack() },
                     onLogout = onLogout,
                     userName = userName,
+                    userEmail = "", 
+                    userPhone = "",
                     userRole = userRole,
                     chamName = chamaName
                 )
@@ -375,6 +381,27 @@ fun MainApp(
                     userName = userName,
                     userRole = userRole,
                     chamName = chamaName
+                )
+            }
+            composable(Screen.Investments.route) {
+                InvestmentsScreen(
+                    chamaId = chamaId,
+                    userRole = userRole,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.MerryGoRound.route) {
+                MerryGoRoundScreen(
+                    chamaId = chamaId,
+                    userRole = userRole,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Welfare.route) {
+                WelfareScreen(
+                    chamaId = chamaId,
+                    userRole = userRole,
+                    onBack = { navController.popBackStack() }
                 )
             }
         }

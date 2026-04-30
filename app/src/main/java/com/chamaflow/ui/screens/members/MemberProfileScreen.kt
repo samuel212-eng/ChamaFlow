@@ -3,8 +3,10 @@ package com.chamaflow.ui.screens.members
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -17,45 +19,45 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.chamaflow.data.models.Member
+import com.chamaflow.data.models.*
 import com.chamaflow.ui.components.*
 import com.chamaflow.ui.theme.*
-import com.chamaflow.ui.viewmodel.MembersViewModel
+import com.chamaflow.ui.viewmodel.MemberDetailViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemberProfileScreen(
-    chamaId: String = "",
-    memberId: String = "", 
+    chamaId: String,
+    memberId: String, 
     onBack: () -> Unit = {}, 
-    viewModel: MembersViewModel = hiltViewModel()
+    viewModel: MemberDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val member = remember(uiState.members, memberId) { 
-        uiState.members.find { it.id == memberId } 
-    }
-    
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Overview", "Contributions", "Loans")
 
-    LaunchedEffect(chamaId) {
-        if (chamaId.isNotEmpty()) viewModel.loadMembers(chamaId)
+    LaunchedEffect(chamaId, memberId) {
+        viewModel.loadMemberDetails(chamaId, memberId)
     }
 
     Scaffold(
         topBar = { 
             TopAppBar(
                 title = { Text("Member Profile", fontWeight = FontWeight.Bold, color = Color.White) }, 
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null, tint = Color.White) } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ChamaBlue)
             ) 
         },
         containerColor = ChamaBackground
     ) { padding ->
-        if (member == null) {
+        val member = uiState.member
+        if (uiState.isLoading) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                if (uiState.isLoading) CircularProgressIndicator(color = ChamaBlue)
-                else Text("Member not found", color = ChamaTextSecondary)
+                CircularProgressIndicator(color = ChamaBlue)
+            }
+        } else if (member == null) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Text("Member not found", color = ChamaTextSecondary)
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -82,21 +84,54 @@ fun MemberProfileScreen(
                     TabRow(selectedTabIndex = selectedTab, containerColor = ChamaSurface, contentColor = ChamaBlue, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp).clip(RoundedCornerShape(12.dp))) {
                         tabs.forEachIndexed { i, tab -> Tab(selected = selectedTab == i, onClick = { selectedTab = i }, text = { Text(tab, style = MaterialTheme.typography.labelMedium, fontWeight = if (selectedTab == i) FontWeight.Bold else FontWeight.Normal) }) }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = ChamaSurface), elevation = CardDefaults.cardElevation(2.dp)) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text("Contact Details", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            DetailRow(Icons.Filled.Phone, "Phone", member.phoneNumber)
-                            HorizontalDivider(color = ChamaOutline)
-                            DetailRow(Icons.Filled.Email, "Email", member.email.ifEmpty { "No email provided" })
-                            HorizontalDivider(color = ChamaOutline)
-                            DetailRow(Icons.Filled.CalendarToday, "Join Date", member.joinDate.ifEmpty { "N/A" })
+                }
+
+                when (selectedTab) {
+                    0 -> item {
+                        Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = ChamaSurface), elevation = CardDefaults.cardElevation(2.dp)) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Text("Contact Details", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                DetailRow(Icons.Filled.Phone, "Phone", member.phoneNumber)
+                                HorizontalDivider(color = ChamaOutline)
+                                DetailRow(Icons.Filled.Email, "Email", member.email.ifEmpty { "No email provided" })
+                                HorizontalDivider(color = ChamaOutline)
+                                DetailRow(Icons.Filled.CalendarToday, "Join Date", member.joinDate.ifEmpty { "N/A" })
+                            }
                         }
                     }
-                    Spacer(Modifier.height(32.dp))
+                    1 -> {
+                        if (uiState.contributions.isEmpty()) {
+                            item { EmptyTabState("No contributions recorded yet") }
+                        } else {
+                            items(uiState.contributions) { contribution ->
+                                Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                                    ContributionRow(contribution = contribution)
+                                }
+                            }
+                        }
+                    }
+                    2 -> {
+                        if (uiState.loans.isEmpty()) {
+                            item { EmptyTabState("No loans recorded yet") }
+                        } else {
+                            items(uiState.loans) { loan ->
+                                Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                                    LoanProgressCard(loan = loan)
+                                }
+                            }
+                        }
+                    }
                 }
+                item { Spacer(Modifier.height(32.dp)) }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyTabState(message: String) {
+    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+        Text(message, style = MaterialTheme.typography.bodyMedium, color = ChamaTextSecondary)
     }
 }
 

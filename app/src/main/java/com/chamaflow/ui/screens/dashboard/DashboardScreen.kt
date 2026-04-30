@@ -5,10 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -26,6 +29,7 @@ import com.chamaflow.data.models.*
 import com.chamaflow.ui.components.*
 import com.chamaflow.ui.theme.*
 import com.chamaflow.ui.viewmodel.DashboardViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,10 +46,15 @@ fun DashboardScreen(
     onNavigateToReports: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
+    onNavigateToInvestments: () -> Unit = {},
+    onNavigateToMerryGoRound: () -> Unit = {},
+    onNavigateToWelfare: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(chamaId) {
         viewModel.loadDashboard(chamaId, chamaName, userId, userRole)
@@ -55,7 +64,9 @@ fun DashboardScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Column(modifier = Modifier.clickable { 
+                        scope.launch { listState.animateScrollToItem(0) }
+                    }) {
                         Text(
                             if (chamaId == "PERSONAL") "My Savings" else chamaName,
                             style = MaterialTheme.typography.titleMedium,
@@ -67,6 +78,13 @@ fun DashboardScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.8f)
                         )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { 
+                        scope.launch { listState.animateScrollToItem(0) }
+                    }) {
+                        Icon(Icons.Filled.Home, "Home", tint = Color.White)
                     }
                 },
                 actions = {
@@ -110,6 +128,7 @@ fun DashboardScreen(
         }
 
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize().padding(padding),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
@@ -119,6 +138,15 @@ fun DashboardScreen(
                     balance = uiState.stats.currentGroupBalance,
                     memberCount = if (chamaId == "PERSONAL") 1 else uiState.stats.totalMembers
                 )
+            }
+
+            if (userRole == "ADMIN" && uiState.pendingJoinRequests.isNotEmpty()) {
+                item {
+                    JoinRequestsSection(
+                        requests = uiState.pendingJoinRequests,
+                        onAccept = { viewModel.acceptRequest(chamaId, it) }
+                    )
+                }
             }
 
             if (userRole == "ADMIN" && uiState.inviteCode.isNotEmpty()) {
@@ -133,7 +161,10 @@ fun DashboardScreen(
                     onContribute = onNavigateToContributions,
                     onLoan = onNavigateToLoans,
                     onReport = onNavigateToReports,
-                    onMeeting = onNavigateToMeetings
+                    onMeeting = onNavigateToMeetings,
+                    onInvestments = onNavigateToInvestments,
+                    onMerryGoRound = onNavigateToMerryGoRound,
+                    onWelfare = onNavigateToWelfare
                 )
             }
 
@@ -189,6 +220,32 @@ fun DashboardScreen(
 }
 
 @Composable
+private fun JoinRequestsSection(requests: List<Map<String, Any>>, onAccept: (String) -> Unit) {
+    Column(modifier = Modifier.padding(20.dp)) {
+        Text("Join Requests", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        requests.forEach { user ->
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = ChamaGoldLight)
+            ) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    MemberAvatar(name = user["fullName"] as? String ?: "User", size = 40.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(user["fullName"] as? String ?: "User", fontWeight = FontWeight.Bold)
+                        Text(user["email"] as? String ?: "", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Button(onClick = { onAccept(user["userId"] as String) }, shape = RoundedCornerShape(8.dp)) {
+                        Text("Accept")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun InviteCodeCard(code: String) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
@@ -210,12 +267,13 @@ private fun InviteCodeCard(code: String) {
 }
 
 @Composable
-private fun QuickActionsRow(onContribute: () -> Unit, onLoan: () -> Unit, onReport: () -> Unit, onMeeting: () -> Unit) {
+private fun QuickActionsRow(onContribute: () -> Unit, onLoan: () -> Unit, onReport: () -> Unit, onMeeting: () -> Unit, onInvestments: () -> Unit, onMerryGoRound: () -> Unit, onWelfare: () -> Unit) {
     val actions = listOf(
         Triple(Icons.Filled.Add, "Save", onContribute),
         Triple(Icons.Filled.RequestPage, "Loan", onLoan),
-        Triple(Icons.Filled.BarChart, "Reports", onReport),
-        Triple(Icons.Filled.EventNote, "Meeting", onMeeting),
+        Triple(Icons.AutoMirrored.Filled.TrendingUp, "Invest", onInvestments),
+        Triple(Icons.Filled.VolunteerActivism, "Welfare", onWelfare),
+        Triple(Icons.Filled.Autorenew, "Merry-Go", onMerryGoRound),
     )
     LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(actions) { (icon, label, action) ->
@@ -244,13 +302,13 @@ private fun StatsGrid(stats: DashboardStats, userRole: String) {
             Item("Total Members", "${stats.totalMembers}", Icons.Filled.Group, ChamaBlueLight, ChamaBlue, "Active"),
             Item("Group Savings", "KES ${fmt(stats.totalContributions)}", Icons.Filled.Savings, ChamaGreenLight, ChamaGreen, "This year"),
             Item("Loans Issued", "KES ${fmt(stats.totalLoansIssued)}", Icons.Filled.AccountBalance, ChamaGoldLight, ChamaGold, "${stats.activeLoans} active"),
-            Item("Penalties", "KES ${fmt(stats.totalPenaltiesCollected)}", Icons.Filled.Warning, ChamaRedLight, ChamaRed, "Collected"),
+            Item("Welfare Fund", "KES ${fmt(stats.welfareBalance)}", Icons.Filled.VolunteerActivism, ChamaOrangeLight, ChamaOrange, "Available"),
         )
     } else {
         listOf(
             Item("My Savings", "KES ${fmt(stats.totalContributions)}", Icons.Filled.Savings, ChamaGreenLight, ChamaGreen, "Total"),
             Item("My Loans", "KES ${fmt(stats.totalLoansIssued - stats.totalLoanRepayments)}", Icons.Filled.AccountBalance, ChamaGoldLight, ChamaGold, "${stats.activeLoans} unpaid"),
-            Item("My Penalties", "KES ${fmt(stats.totalPenaltiesCollected)}", Icons.Filled.Warning, ChamaRedLight, ChamaRed, "Owed"),
+            Item("Welfare", "Active", Icons.Filled.VolunteerActivism, ChamaOrangeLight, ChamaOrange, "Member"),
             Item("Status", "Active", Icons.Filled.CheckCircle, ChamaBlueLight, ChamaBlue, "Member"),
         )
     }

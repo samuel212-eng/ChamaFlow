@@ -150,7 +150,10 @@ class ChamaViewModel @Inject constructor(
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, errorMessage = null) }
             when (val r = repo.requestToJoin(chamaId)) {
-                is AuthResult.Success -> _ui.update { it.copy(isLoading = false, successMessage = "Join request sent!") }
+                is AuthResult.Success -> {
+                    skipChamaSelection() // Take to personal dashboard while waiting
+                    _ui.update { it.copy(isLoading = false, successMessage = "Join request sent! You can start saving personally while waiting for approval.") }
+                }
                 is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }
                 else -> {}
             }
@@ -193,18 +196,61 @@ class ChamaViewModel @Inject constructor(
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-data class DashboardUiState(val stats: DashboardStats = DashboardStats(), val chamaName: String = "", val inviteCode: String = "", val isLoading: Boolean = false, val errorMessage: String? = null)
+data class DashboardUiState(
+    val stats: DashboardStats = DashboardStats(), 
+    val chamaName: String = "", 
+    val inviteCode: String = "", 
+    val isLoading: Boolean = false, 
+    val errorMessage: String? = null,
+    val pendingJoinRequests: List<Map<String, Any>> = emptyList(),
+    val activeMerryGoRound: MerryGoRound? = null,
+    val currentMGRReceiver: String = ""
+)
 
 @HiltViewModel
-class DashboardViewModel @Inject constructor(private val chamaRepo: ChamaRepository, private val membersRepo: MembersRepository, private val contribRepo: ContributionsRepository, private val loansRepo: LoansRepository, private val penaltiesRepo: PenaltiesRepository) : ViewModel() {
+class DashboardViewModel @Inject constructor(
+    private val chamaRepo: ChamaRepository, 
+    private val membersRepo: MembersRepository, 
+    private val contribRepo: ContributionsRepository, 
+    private val loansRepo: LoansRepository, 
+    private val penaltiesRepo: PenaltiesRepository,
+    private val mgrRepo: MerryGoRoundRepository
+) : ViewModel() {
     private val _ui = MutableStateFlow(DashboardUiState()); val uiState = _ui.asStateFlow()
+    
     fun loadDashboard(chamaId: String, chamaName: String, userId: String, userRole: String) {
         _ui.update { it.copy(chamaName = chamaName, isLoading = true) }
         viewModelScope.launch {
             if (chamaId != "PERSONAL") {
+                // Listen to Join Requests reactively
+                if (userRole == "ADMIN") {
+                    launch {
+                        chamaRepo.getJoinRequestsFlow(chamaId).collect { requests ->
+                            _ui.update { it.copy(pendingJoinRequests = requests) }
+                        }
+                    }
+                }
+                
+                // Fetch basic chama info for invite code
                 val chamaInfo = chamaRepo.getChamaById(chamaId)
                 if (chamaInfo is AuthResult.Success) {
                     _ui.update { it.copy(inviteCode = chamaInfo.data.inviteCode) }
+                }
+
+                // Listen to Merry Go Round
+                launch {
+                    mgrRepo.getMerryGoRoundsFlow(chamaId).collect { mgrs ->
+                        if (mgrs.isNotEmpty()) {
+                            val mgr = mgrs.first()
+                            val receiverId = mgr.rotationOrder.getOrNull(mgr.currentIndex)
+                            if (receiverId != null) {
+                                val memberResult = membersRepo.getMemberById(chamaId, receiverId)
+                                if (memberResult is AuthResult.Success) {
+                                    _ui.update { it.copy(activeMerryGoRound = mgr, currentMGRReceiver = memberResult.data.fullName) }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -225,7 +271,8 @@ class DashboardViewModel @Inject constructor(private val chamaRepo: ChamaReposit
                         currentGroupBalance = members.sumOf { it.totalContributions } - activeLoans.sumOf { it.remainingBalance },
                         activeLoans = activeLoans.size,
                         overdueLoans = loans.count { it.status == LoanStatus.OVERDUE },
-                        recentContributions = contributions.take(5)
+                        recentContributions = contributions.take(5),
+                        welfareBalance = members.sumOf { it.welfareBalance }
                     )
                 } else {
                     // Member personal stats
@@ -243,44 +290,111 @@ class DashboardViewModel @Inject constructor(private val chamaRepo: ChamaReposit
                         currentGroupBalance = myMember?.totalContributions ?: 0.0,
                         activeLoans = myActiveLoans.size,
                         overdueLoans = myLoans.count { it.status == LoanStatus.OVERDUE },
-                        recentContributions = myContribs
+                        recentContributions = myContribs,
+                        welfareBalance = myMember?.welfareBalance ?: 0.0
                     )
                 }
             }.catch { e -> _ui.update { it.copy(isLoading = false, errorMessage = e.message) } }
              .collect { stats -> _ui.update { it.copy(stats = stats, isLoading = false) } }
         }
     }
+
+    fun acceptRequest(chamaId: String, userId: String) {
+        viewModelScope.launch {
+            chamaRepo.acceptJoinRequest(chamaId, userId)
+        }
+    }
 }
 
 // ─── Members ──────────────────────────────────────────────────────────────────
 
-data class MembersUiState(val members: List<Member> = emptyList(), val isLoading: Boolean = false, val errorMessage: String? = null, val successMessage: String? = null, val searchQuery: String = "", val selectedFilter: String = "All", val appUsers: List<Map<String, Any>> = emptyList()) {
+data class MembersUiState(
+    val members: List<Member> = emptyList(), 
+    val loans: List<Loan> = emptyList(),
+    val isLoading: Boolean = false, 
+    val errorMessage: String? = null, 
+    val successMessage: String? = null, 
+    val searchQuery: String = "", 
+    val selectedFilter: String = "All", 
+    val appUsers: List<Map<String, Any>> = emptyList()
+) {
     val filteredMembers get() = members.filter { m ->
         val s = m.fullName.contains(searchQuery, true) || m.phoneNumber.contains(searchQuery, true)
         val f = when (selectedFilter) { "Admin" -> m.role == MemberRole.ADMIN; "Treasurer" -> m.role == MemberRole.TREASURER; "Member" -> m.role == MemberRole.MEMBER && m.status == MemberStatus.ACTIVE; "Inactive" -> m.status == MemberStatus.INACTIVE; else -> true }
         s && f
     }
     val activeCount get() = members.count { it.status == MemberStatus.ACTIVE }
-    val withLoans get() = members.count { it.loanBalance > 0 }
+    val withLoans get() = loans.filter { it.status == LoanStatus.ACTIVE || it.status == LoanStatus.OVERDUE }.map { it.memberId }.distinct().size
     val withPenalties get() = members.count { it.penaltiesOwed > 0 }
 }
 
 @HiltViewModel
-class MembersViewModel @Inject constructor(private val repo: MembersRepository, private val authRepo: AuthRepository) : ViewModel() {
+class MembersViewModel @Inject constructor(
+    private val repo: MembersRepository, 
+    private val loansRepo: LoansRepository,
+    private val authRepo: AuthRepository
+) : ViewModel() {
     private val _ui = MutableStateFlow(MembersUiState()); val uiState = _ui.asStateFlow()
-    fun loadMembers(chamaId: String) { viewModelScope.launch { _ui.update { it.copy(isLoading = true) }; repo.getMembersFlow(chamaId).catch { e -> _ui.update { it.copy(isLoading = false, errorMessage = e.message) } }.collect { members -> _ui.update { it.copy(members = members, isLoading = false) } } } }
+    
+    fun loadMembers(chamaId: String) { 
+        viewModelScope.launch { 
+            _ui.update { it.copy(isLoading = true) }
+            combine(repo.getMembersFlow(chamaId), loansRepo.getLoansFlow(chamaId)) { members, loans ->
+                _ui.update { it.copy(members = members, loans = loans, isLoading = false) }
+            }.catch { e -> _ui.update { it.copy(isLoading = false, errorMessage = e.message) } }.collect()
+        } 
+    }
+    
     fun setSearchQuery(q: String) { _ui.update { it.copy(searchQuery = q) } }
     fun setFilter(f: String) { _ui.update { it.copy(selectedFilter = f) } }
-    fun searchAppUsers(query: String) {
-        if (query.length < 3) return
-        viewModelScope.launch {
-            // This is a mock search for now, ideally you'd search the 'users' collection
-            // but for safety/privacy reasons we might just search by specific email or phone
-        }
-    }
     fun addMember(chamaId: String, member: Member) { viewModelScope.launch { _ui.update { it.copy(isLoading = true) }; when (val r = repo.addMember(chamaId, member)) { is AuthResult.Success -> _ui.update { it.copy(isLoading = false, successMessage = "Member added") }; is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }; else -> {} } } }
     fun deleteMember(chamaId: String, memberId: String) { viewModelScope.launch { when (val r = repo.deleteMember(chamaId, memberId)) { is AuthResult.Success -> _ui.update { it.copy(successMessage = "Member removed") }; is AuthResult.Error -> _ui.update { it.copy(errorMessage = r.message) }; else -> {} } } }
     fun clearMessages() { _ui.update { it.copy(errorMessage = null, successMessage = null) } }
+}
+
+// ─── Member Detail ────────────────────────────────────────────────────────────
+
+data class MemberDetailUiState(
+    val member: Member? = null,
+    val contributions: List<Contribution> = emptyList(),
+    val loans: List<Loan> = emptyList(),
+    val penalties: List<Penalty> = emptyList(),
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+@HiltViewModel
+class MemberDetailViewModel @Inject constructor(
+    private val membersRepo: MembersRepository,
+    private val contribRepo: ContributionsRepository,
+    private val loansRepo: LoansRepository,
+    private val penaltiesRepo: PenaltiesRepository
+) : ViewModel() {
+    private val _ui = MutableStateFlow(MemberDetailUiState()); val uiState = _ui.asStateFlow()
+
+    fun loadMemberDetails(chamaId: String, memberId: String) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true) }
+            val memberResult = membersRepo.getMemberById(chamaId, memberId)
+            if (memberResult is AuthResult.Success) {
+                _ui.update { it.copy(member = memberResult.data) }
+                combine(
+                    contribRepo.getMemberContributions(chamaId, memberId),
+                    loansRepo.getMemberLoans(chamaId, memberId),
+                    penaltiesRepo.getMemberPenalties(chamaId, memberId)
+                ) { contribs, loans, penalties ->
+                    _ui.update { it.copy(
+                        contributions = contribs,
+                        loans = loans,
+                        penalties = penalties,
+                        isLoading = false
+                    ) }
+                }.catch { e -> _ui.update { it.copy(isLoading = false, errorMessage = e.message) } }.collect()
+            } else {
+                _ui.update { it.copy(isLoading = false, errorMessage = (memberResult as AuthResult.Error).message) }
+            }
+        }
+    }
 }
 
 // ─── Contributions ────────────────────────────────────────────────────────────
@@ -338,6 +452,88 @@ class LoansViewModel @Inject constructor(private val repo: LoansRepository) : Vi
         }
     }
     fun clearMessages() { _ui.update { it.copy(errorMessage = null, successMessage = null) } }
+}
+
+// ─── Investments ──────────────────────────────────────────────────────────────
+
+data class InvestmentsUiState(
+    val investments: List<Investment> = emptyList(),
+    val dividendDistributions: List<DividendDistribution> = emptyList(),
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val successMessage: String? = null,
+    val latestDistribution: DividendDistribution? = null
+)
+
+@HiltViewModel
+class InvestmentsViewModel @Inject constructor(
+    private val repo: InvestmentsRepository,
+    private val membersRepo: MembersRepository
+) : ViewModel() {
+    private val _ui = MutableStateFlow(InvestmentsUiState()); val uiState = _ui.asStateFlow()
+
+    fun loadInvestments(chamaId: String) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true) }
+            repo.getInvestmentsFlow(chamaId).catch { e -> _ui.update { it.copy(isLoading = false, errorMessage = e.message) } }
+                .collect { list -> _ui.update { it.copy(investments = list, isLoading = false) } }
+        }
+    }
+
+    fun addInvestment(chamaId: String, investment: Investment) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true) }
+            when (val r = repo.addInvestment(chamaId, investment)) {
+                is AuthResult.Success -> _ui.update { it.copy(isLoading = false, successMessage = "Investment recorded") }
+                is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }
+                else -> {}
+            }
+        }
+    }
+
+    fun distributeDividends(chamaId: String, investmentId: String, investmentTitle: String, totalAmount: Double) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoading = true) }
+            membersRepo.getMembersFlow(chamaId).take(1).collect { members ->
+                val totalGroupContributions = members.sumOf { it.totalContributions }
+                if (totalGroupContributions == 0.0) {
+                    _ui.update { it.copy(isLoading = false, errorMessage = "No contributions found to calculate shares.") }
+                    return@collect
+                }
+
+                val payouts = members.map { m ->
+                    val percentage = (m.totalContributions / totalGroupContributions)
+                    MemberPayout(
+                        memberId = m.id,
+                        memberName = m.fullName,
+                        contributionPercentage = percentage * 100,
+                        amount = totalAmount * percentage
+                    )
+                }
+
+                val distribution = DividendDistribution(
+                    chamaId = chamaId,
+                    investmentId = investmentId,
+                    investmentTitle = investmentTitle,
+                    totalAmount = totalAmount,
+                    dateDistributed = LocalDate.now().toString(),
+                    memberPayouts = payouts
+                )
+
+                when (val r = repo.distributeDividends(chamaId, distribution)) {
+                    is AuthResult.Success -> _ui.update { it.copy(
+                        isLoading = false, 
+                        successMessage = "Dividends distributed successfully",
+                        latestDistribution = distribution
+                    ) }
+                    is AuthResult.Error -> _ui.update { it.copy(isLoading = false, errorMessage = r.message) }
+                    else -> {}
+                }
+            }
+        }
+    }
+
+    fun clearMessages() { _ui.update { it.copy(errorMessage = null, successMessage = null, latestDistribution = null) } }
 }
 
 // ─── Meetings ─────────────────────────────────────────────────────────────────
