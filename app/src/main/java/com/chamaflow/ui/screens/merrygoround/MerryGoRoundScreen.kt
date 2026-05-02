@@ -15,9 +15,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.chamaflow.data.models.*
 import com.chamaflow.ui.components.*
@@ -49,9 +53,13 @@ fun MerryGoRoundScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Merry Go Round", fontWeight = FontWeight.Bold, color = Color.White) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ChamaBlue)
+                title = { Text("Merry Go Round", fontWeight = FontWeight.ExtraBold, color = Color.White) },
+                navigationIcon = { 
+                    IconButton(onClick = onBack) { 
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) 
+                    } 
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Primary)
             )
         },
         floatingActionButton = {
@@ -59,99 +67,100 @@ fun MerryGoRoundScreen(
                 ExtendedFloatingActionButton(
                     onClick = { showCreateSheet = true },
                     icon = { Icon(Icons.Filled.Autorenew, null) },
-                    text = { Text("Start Rotation") },
-                    containerColor = ChamaBlue,
-                    contentColor = Color.White
+                    text = { Text("Start Rotation", fontWeight = FontWeight.Bold) },
+                    containerColor = Secondary,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(16.dp)
                 )
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = ChamaBackground
+        containerColor = Background
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ChamaBlue)
+                    CircularProgressIndicator(color = Secondary)
                 }
             } else if (uiState.merryGoRounds.isEmpty()) {
                 EmptyState(
                     icon = Icons.Outlined.Cached,
                     title = "No Merry Go Round",
-                    subtitle = "Set up a rotating fund for your members"
+                    subtitle = "Set up a rotating fund for your members to receive a large pool of funds periodically."
                 )
             } else {
                 val mgr = uiState.merryGoRounds.first()
                 val currentReceiverId = mgr.rotationOrder.getOrNull(mgr.currentIndex)
                 val currentReceiver = uiState.members.find { it.id == currentReceiverId }
 
-                // Status Card
+                // Premium Status Card
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = ChamaBlue),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                        .shadow(elevation = 16.dp, shape = RoundedCornerShape(28.dp), spotColor = Primary.copy(alpha = 0.4f)),
+                    shape = RoundedCornerShape(28.dp),
                 ) {
-                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Current Receiver", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
-                        Text(currentReceiver?.fullName ?: "Unknown", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
-                        
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Box(modifier = Modifier.background(Brush.linearGradient(PremiumGradient))) {
+                        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Icon(Icons.Filled.Stars, null, tint = Warning, modifier = Modifier.size(20.dp))
+                                Text("NEXT RECIPIENT", style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
+                            }
+                            
                             Column {
-                                Text("Pool Amount", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
-                                Text("KES ${"%,.0f".format(mgr.totalPool)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                Text(
+                                    currentReceiver?.fullName ?: "Member Not Assigned", 
+                                    style = MaterialTheme.typography.headlineSmall, 
+                                    fontWeight = FontWeight.ExtraBold, 
+                                    color = Color.White,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    "Is scheduled to receive the pool", 
+                                    style = MaterialTheme.typography.bodySmall, 
+                                    color = Color.White.copy(alpha = 0.6f)
+                                )
                             }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Contribution", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
-                                Text("KES ${"%,.0f".format(mgr.amountPerMember)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
-                            }
-                        }
-
-                        if (userRole == "ADMIN") {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = { 
-                                        // TODO: Send notification to the receiver
-                                        viewModel.clearMessages() // Temporary use
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f)),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Icon(Icons.Filled.Notifications, null, tint = Color.White)
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("Remind", color = Color.White)
+                            
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Column {
+                                    Text("Pool Total", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                                    Text("KES ${"%,.0f".format(mgr.totalPool)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Accent)
                                 }
-                                
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Each Contributes", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                                    Text("KES ${"%,.0f".format(mgr.amountPerMember)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                                }
+                            }
+
+                            if (userRole == "ADMIN") {
                                 Button(
                                     onClick = { 
                                         if (currentReceiver != null) {
                                             viewModel.recordPayout(chamaId, mgr.id, currentReceiver.id, currentReceiver.fullName, mgr.totalPool)
                                         }
                                     },
-                                    modifier = Modifier.weight(1.5f),
-                                    colors = ButtonDefaults.buttonColors(containerColor = ChamaGreen),
-                                    shape = RoundedCornerShape(10.dp)
+                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
                                 ) {
-                                    Icon(Icons.Filled.CheckCircle, null)
+                                    Icon(Icons.Filled.CheckCircle, null, tint = Color.White)
                                     Spacer(Modifier.width(8.dp))
-                                    Text("Confirm Payout")
+                                    Text("Confirm Payout", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
                         }
                     }
                 }
 
-                Text(
-                    "Rotation Schedule",
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                SectionHeader(title = "Rotation Schedule", actionLabel = "Order", onAction = { /* Show order info */ })
 
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     itemsIndexed(mgr.rotationOrder) { index, memberId ->
                         val member = uiState.members.find { it.id == memberId }
@@ -183,41 +192,55 @@ fun MerryGoRoundScreen(
 
 @Composable
 fun RotationItem(name: String, index: Int, isCurrent: Boolean, isPast: Boolean) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isCurrent) ChamaBlueLight else ChamaSurface
-        ),
-        border = if (isCurrent) androidx.compose.foundation.BorderStroke(1.dp, ChamaBlue) else null
+        color = if (isCurrent) Secondary.copy(alpha = 0.05f) else Color.Transparent
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (isPast) ChamaGreen else if (isCurrent) ChamaBlue else ChamaOutline),
+                    .background(
+                        if (isPast) Color(0xFFDCFCE7) 
+                        else if (isCurrent) Secondary 
+                        else Color(0xFFF1F5F9)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                if (isPast) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                else Text("$index", color = if (isCurrent) Color.White else ChamaTextSecondary, fontWeight = FontWeight.Bold)
+                if (isPast) Icon(Icons.Filled.Check, null, tint = Color(0xFF059669), modifier = Modifier.size(20.dp))
+                else Text("$index", color = if (isCurrent) Color.White else TextSecondary, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
             }
             
             Column(modifier = Modifier.weight(1f)) {
-                Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal)
-                if (isCurrent) Text("Receiving this month", style = MaterialTheme.typography.labelSmall, color = ChamaBlue)
-                else if (isPast) Text("Received", style = MaterialTheme.typography.labelSmall, color = ChamaGreenDark)
+                Text(
+                    name, 
+                    style = MaterialTheme.typography.bodyLarge, 
+                    fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Bold, 
+                    color = if (isCurrent) Primary else TextPrimary
+                )
+                if (isCurrent) {
+                    Text("Currently receiving pool funds", style = MaterialTheme.typography.labelSmall, color = Secondary, fontWeight = FontWeight.Bold)
+                } else if (isPast) {
+                    Text("Fund payout completed", style = MaterialTheme.typography.labelSmall, color = Color(0xFF059669), fontWeight = FontWeight.Bold)
+                } else {
+                    Text("Waiting for turn", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                }
             }
             
             if (isCurrent) {
-                Icon(Icons.Filled.NotificationsActive, null, tint = ChamaBlue, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.NotificationsActive, null, tint = Secondary, modifier = Modifier.size(22.dp))
+            } else if (!isPast) {
+                Icon(Icons.Outlined.Schedule, null, tint = TextMuted, modifier = Modifier.size(20.dp))
             }
         }
     }
+    HorizontalDivider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(start = 76.dp))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -226,27 +249,31 @@ fun CreateMerryGoRoundSheet(members: List<Member>, onDismiss: () -> Unit, onSave
     var amount by remember { mutableStateOf("1000") }
     val rotationOrder = remember { mutableStateListOf<Member>().apply { addAll(members) } }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(24.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("Set Up Merry Go Round", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Surface) {
+        Column(modifier = Modifier.padding(24.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Text("Initialize Merry Go Round", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Primary)
             
             OutlinedTextField(
                 value = amount,
                 onValueChange = { amount = it },
-                label = { Text("Contribution per member") },
+                label = { Text("Amount Each Member Contributes") },
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                prefix = { Text("KES ", fontWeight = FontWeight.Bold) },
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
             )
 
-            Text("Rotation Order (Members will receive in this order)", style = MaterialTheme.typography.labelMedium, color = ChamaTextSecondary)
+            Text("Set Payout Order", style = MaterialTheme.typography.labelLarge, color = Primary, fontWeight = FontWeight.ExtraBold)
             
-            LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 300.dp).background(Color(0xFFF8FAFC), RoundedCornerShape(16.dp)).padding(4.dp)
+            ) {
                 itemsIndexed(rotationOrder) { index, member ->
                     ListItem(
-                        headlineContent = { Text(member.fullName) },
+                        headlineContent = { Text(member.fullName, fontWeight = FontWeight.Bold, color = Primary) },
                         leadingContent = { 
-                            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(ChamaBlueLight), contentAlignment = Alignment.Center) {
-                                Text("${index + 1}", style = MaterialTheme.typography.labelSmall, color = ChamaBlue)
+                            Box(modifier = Modifier.size(28.dp).clip(CircleShape).background(Secondary.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                                Text("${index + 1}", style = MaterialTheme.typography.labelSmall, color = Secondary, fontWeight = FontWeight.ExtraBold)
                             }
                         },
                         trailingContent = {
@@ -255,17 +282,19 @@ fun CreateMerryGoRoundSheet(members: List<Member>, onDismiss: () -> Unit, onSave
                                     IconButton(onClick = { 
                                         val m = rotationOrder.removeAt(index)
                                         rotationOrder.add(index - 1, m)
-                                    }) { Icon(Icons.Filled.ArrowUpward, null) }
+                                    }) { Icon(Icons.Filled.ArrowUpward, null, tint = Secondary) }
                                 }
                                 if (index < rotationOrder.size - 1) {
                                     IconButton(onClick = { 
                                         val m = rotationOrder.removeAt(index)
                                         rotationOrder.add(index + 1, m)
-                                    }) { Icon(Icons.Filled.ArrowDownward, null) }
+                                    }) { Icon(Icons.Filled.ArrowDownward, null, tint = Secondary) }
                                 }
                             }
-                        }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
+                    if (index < rotationOrder.size - 1) HorizontalDivider(color = Color.White, thickness = 2.dp)
                 }
             }
 
@@ -274,10 +303,12 @@ fun CreateMerryGoRoundSheet(members: List<Member>, onDismiss: () -> Unit, onSave
                     onSave(amount.toDoubleOrNull() ?: 0.0, rotationOrder.map { it.id })
                     onDismiss()
                 },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = amount.isNotEmpty() && rotationOrder.isNotEmpty()
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                enabled = amount.isNotEmpty() && rotationOrder.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = Primary)
             ) {
-                Text("Start Merry Go Round")
+                Text("Launch Merry Go Round", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
     }

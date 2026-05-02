@@ -5,12 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.chamaflow.data.models.*
@@ -114,15 +115,15 @@ fun DashboardScreen(
                         MemberAvatar(name = adminName, size = 34.dp, backgroundColor = Color.White.copy(alpha = 0.2f), textColor = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ChamaBlue)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Primary)
             )
         },
-        containerColor = ChamaBackground
+        containerColor = Background
     ) { padding ->
 
         if (uiState.isLoading && uiState.stats.totalMembers == 0 && chamaId != "PERSONAL") {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = ChamaBlue)
+                CircularProgressIndicator(color = Secondary)
             }
             return@Scaffold
         }
@@ -259,7 +260,7 @@ private fun InviteCodeCard(code: String) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("Group Invite Code", style = MaterialTheme.typography.labelSmall, color = ChamaBlue)
-                Text(code, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = ChamaBlueDark)
+                Text(code, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Primary)
             }
             Icon(Icons.Filled.ContentCopy, "Copy", tint = ChamaBlue, modifier = Modifier.size(20.dp))
         }
@@ -288,7 +289,7 @@ private fun QuickActionsRow(onContribute: () -> Unit, onLoan: () -> Unit, onRepo
                 ) {
                     Icon(icon, label, tint = ChamaBlue, modifier = Modifier.size(24.dp))
                 }
-                Text(label, style = MaterialTheme.typography.labelSmall, color = ChamaTextSecondary, fontWeight = FontWeight.Medium)
+                Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -300,14 +301,14 @@ private fun StatsGrid(stats: DashboardStats, userRole: String) {
     val items = if (userRole == "ADMIN") {
         listOf(
             Item("Total Members", "${stats.totalMembers}", Icons.Filled.Group, ChamaBlueLight, ChamaBlue, "Active"),
-            Item("Group Savings", "KES ${fmt(stats.totalContributions)}", Icons.Filled.Savings, ChamaGreenLight, ChamaGreen, "This year"),
-            Item("Loans Issued", "KES ${fmt(stats.totalLoansIssued)}", Icons.Filled.AccountBalance, ChamaGoldLight, ChamaGold, "${stats.activeLoans} active"),
+            Item("Group Savings", "KES ${fmt(stats.totalContributions)}", Icons.Filled.Savings, ChamaGreenLight, Accent, "This year"),
+            Item("Loans Issued", "KES ${fmt(stats.totalLoansIssued)}", Icons.Filled.AccountBalance, ChamaGoldLight, Warning, "${stats.activeLoans} active"),
             Item("Welfare Fund", "KES ${fmt(stats.welfareBalance)}", Icons.Filled.VolunteerActivism, ChamaOrangeLight, ChamaOrange, "Available"),
         )
     } else {
         listOf(
-            Item("My Savings", "KES ${fmt(stats.totalContributions)}", Icons.Filled.Savings, ChamaGreenLight, ChamaGreen, "Total"),
-            Item("My Loans", "KES ${fmt(stats.totalLoansIssued - stats.totalLoanRepayments)}", Icons.Filled.AccountBalance, ChamaGoldLight, ChamaGold, "${stats.activeLoans} unpaid"),
+            Item("My Savings", "KES ${fmt(stats.totalContributions)}", Icons.Filled.Savings, ChamaGreenLight, Accent, "Total"),
+            Item("My Loans", "KES ${fmt(stats.totalLoansIssued - stats.totalLoanRepayments)}", Icons.Filled.AccountBalance, ChamaGoldLight, Warning, "${stats.activeLoans} unpaid"),
             Item("Welfare", "Active", Icons.Filled.VolunteerActivism, ChamaOrangeLight, ChamaOrange, "Member"),
             Item("Status", "Active", Icons.Filled.CheckCircle, ChamaBlueLight, ChamaBlue, "Member"),
         )
@@ -329,7 +330,7 @@ private fun UpcomingMeetingCard(meeting: Meeting, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = ChamaBlue),
+        colors = CardDefaults.cardColors(containerColor = Primary),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -355,9 +356,9 @@ private fun OverdueAlertBanner(overdueLoans: Int, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = ChamaRedLight)
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Filled.Warning, null, tint = ChamaRed)
-            Text("$overdueLoans loan${if (overdueLoans > 1) "s" else ""} overdue — tap to review", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = ChamaRed, modifier = Modifier.weight(1f))
-            Icon(Icons.Filled.ChevronRight, null, tint = ChamaRed)
+            Icon(Icons.Filled.Warning, null, tint = Error)
+            Text("$overdueLoans loan${if (overdueLoans > 1) "s" else ""} overdue — tap to review", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = Error, modifier = Modifier.weight(1f))
+            Icon(Icons.Filled.ChevronRight, null, tint = Error)
         }
     }
 }

@@ -5,6 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -14,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -51,6 +55,7 @@ import com.chamaflow.ui.viewmodel.AuthViewModel
 import com.chamaflow.ui.viewmodel.ChamaViewModel
 import com.chamaflow.ui.viewmodel.MembersViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -71,7 +76,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ─── Root: auth gate ──────────────────────────────────────────────────────────
+// ── Root: auth gate ──────────────────────────────────────────────────────────
 
 @Composable
 fun RootApp(prefsRepository: UserPreferencesRepository, activity: android.app.Activity) {
@@ -83,7 +88,7 @@ fun RootApp(prefsRepository: UserPreferencesRepository, activity: android.app.Ac
 
     if (authState.isLoading && !authState.isLoggedIn && authState.verificationId == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = ChamaBlue)
+            CircularProgressIndicator(color = Secondary)
         }
         return
     }
@@ -113,7 +118,6 @@ fun ChamaOnboardingFlow(authViewModel: AuthViewModel) {
     var showCreateScreen by remember { mutableStateOf(false) }
 
     LaunchedEffect(chamaState.userChamas) {
-        // Automatically enter the first chama if the user is already a member
         if (chamaState.userChamas.isNotEmpty()) {
             val first = chamaState.userChamas.first()
             chamaViewModel.selectChama(first.id, first.name)
@@ -122,7 +126,7 @@ fun ChamaOnboardingFlow(authViewModel: AuthViewModel) {
 
     if (chamaState.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = ChamaBlue)
+            CircularProgressIndicator(color = Secondary)
         }
     } else if (showCreateScreen) {
         CreateChamaScreen(
@@ -141,8 +145,6 @@ fun ChamaOnboardingFlow(authViewModel: AuthViewModel) {
         )
     }
 }
-
-// ─── Auth flow ────────────────────────────────────────────────────────────────
 
 @Composable
 fun AuthFlow(authViewModel: AuthViewModel, activity: android.app.Activity) {
@@ -196,8 +198,6 @@ fun AuthFlow(authViewModel: AuthViewModel, activity: android.app.Activity) {
     }
 }
 
-// ─── Forgot password ──────────────────────────────────────────────────────────
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForgotPasswordScreen(onBack: () -> Unit, onSend: (String) -> Unit, isLoading: Boolean, successMessage: String?) {
@@ -207,34 +207,35 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onSend: (String) -> Unit, isLoading
             TopAppBar(
                 title = { Text("Reset Password", fontWeight = FontWeight.Bold, color = Color.White) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ChamaBlue)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Primary)
             )
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("Enter your email and we'll send a reset link.", style = MaterialTheme.typography.bodyMedium, color = ChamaTextSecondary)
+            Text("Enter your email and we'll send a reset link.", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
             successMessage?.let {
-                Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp), color = ChamaGreenLight) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Icon(Icons.Filled.CheckCircle, null, tint = ChamaGreen)
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = ChamaGreenDark)
+                Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp), color = Color(0xFFDCFCE7)) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.CheckCircle, null, tint = Accent)
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFF057A55))
                     }
                 }
             }
             OutlinedTextField(
                 value = email, onValueChange = { email = it.trim() },
                 label = { Text("Email Address") },
-                leadingIcon = { Icon(Icons.Filled.Email, null, tint = ChamaTextSecondary) },
+                leadingIcon = { Icon(Icons.Filled.Email, null, tint = TextSecondary) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                 singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ChamaBlue, unfocusedBorderColor = ChamaOutline)
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Secondary, unfocusedBorderColor = ChamaOutline)
             )
             Button(
                 onClick = { if (email.contains("@")) onSend(email) },
                 enabled = email.contains("@") && !isLoading,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Primary)
             ) {
                 if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                 else Text("Send Reset Link", fontWeight = FontWeight.SemiBold)
@@ -242,8 +243,6 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onSend: (String) -> Unit, isLoading
         }
     }
 }
-
-// ─── Main app (post-login) ────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -258,76 +257,76 @@ fun MainApp(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val bottomNavRoutes = bottomNavItems.map { it.screen.route }
-    val showBottomNav = currentDestination?.route in bottomNavRoutes
+    
+    val pagerState = rememberPagerState(pageCount = { bottomNavItems.size })
+    val scope = rememberCoroutineScope()
+    
+    val isTopLevel = currentDestination?.route == "main_tabs" || currentDestination == null
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            if (showBottomNav) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    bottomNavItems.forEach { item ->
-                        val isSelected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
+            if (isTopLevel) {
+                NavigationBar(containerColor = Surface) {
+                    bottomNavItems.forEachIndexed { index, item ->
+                        val isSelected = pagerState.currentPage == index
                         NavigationBarItem(
                             icon = { Icon(if (isSelected) item.selectedIcon else item.unselectedIcon, item.label) },
                             label = { Text(item.label, style = MaterialTheme.typography.labelSmall, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal) },
                             selected = isSelected,
                             onClick = {
-                                navController.navigate(item.screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true; restoreState = true
-                                }
+                                scope.launch { pagerState.animateScrollToPage(index) }
                             },
-                            colors = NavigationBarItemDefaults.colors(selectedIconColor = ChamaBlue, selectedTextColor = ChamaBlue, unselectedIconColor = ChamaTextSecondary, unselectedTextColor = ChamaTextSecondary, indicatorColor = ChamaBlueLight)
+                            colors = NavigationBarItemDefaults.colors(selectedIconColor = Secondary, selectedTextColor = Secondary, unselectedIconColor = TextSecondary, unselectedTextColor = TextSecondary, indicatorColor = Secondary.copy(alpha = 0.1f))
                         )
                     }
                 }
             }
         }
     ) { innerPadding ->
-        NavHost(navController = navController, startDestination = Screen.Dashboard.route, modifier = Modifier.padding(innerPadding)) {
+        NavHost(navController = navController, startDestination = "main_tabs") {
 
-            composable(Screen.Dashboard.route) {
-                DashboardScreen(
-                    chamaId = chamaId,
-                    chamaName = chamaName,
-                    userId = userId,
-                    userRole = userRole,
-                    adminName = userName,
-                    onNavigateToMembers = { navController.navigate(Screen.Members.route) },
-                    onNavigateToContributions = { navController.navigate(Screen.Contributions.route) },
-                    onNavigateToLoans = { navController.navigate(Screen.Loans.route) },
-                    onNavigateToMeetings = { navController.navigate(Screen.Meetings.route) },
-                    onNavigateToReports = { navController.navigate(Screen.Reports.route) },
-                    onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
-                    onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
-                    onNavigateToInvestments = { navController.navigate(Screen.Investments.route) },
-                    onNavigateToMerryGoRound = { navController.navigate(Screen.MerryGoRound.route) },
-                    onNavigateToWelfare = { navController.navigate(Screen.Welfare.route) }
-                )
-            }
-            composable(Screen.Members.route) {
-                MembersScreen(
-                    chamaId = chamaId,
-                    onAddMember = { navController.navigate(Screen.AddMember.route) },
-                    onMemberClick = { navController.navigate(Screen.MemberDetail.createRoute(it)) }
-                )
-            }
-            composable(Screen.Contributions.route) {
-                ContributionsScreen(chamaId = chamaId)
-            }
-            composable(Screen.Loans.route) {
-                LoansScreen(
-                    chamaId = chamaId,
-                    onApplyLoan = { navController.navigate(Screen.AddLoan.route) },
-                    onLoanClick = { navController.navigate(Screen.LoanDetail.createRoute(it)) }
-                )
-            }
-            composable(Screen.Meetings.route) {
-                MeetingsScreen(chamaId = chamaId)
+            composable("main_tabs") {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    beyondViewportPageCount = 1
+                ) { page ->
+                    when (bottomNavItems[page].screen) {
+                        Screen.Dashboard -> DashboardScreen(
+                            chamaId = chamaId,
+                            chamaName = chamaName,
+                            userId = userId,
+                            userRole = userRole,
+                            adminName = userName,
+                            onNavigateToMembers = { scope.launch { pagerState.animateScrollToPage(1) } },
+                            onNavigateToContributions = { scope.launch { pagerState.animateScrollToPage(2) } },
+                            onNavigateToLoans = { scope.launch { pagerState.animateScrollToPage(3) } },
+                            onNavigateToMeetings = { scope.launch { pagerState.animateScrollToPage(4) } },
+                            onNavigateToReports = { navController.navigate(Screen.Reports.route) },
+                            onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
+                            onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
+                            onNavigateToInvestments = { navController.navigate(Screen.Investments.route) },
+                            onNavigateToMerryGoRound = { navController.navigate(Screen.MerryGoRound.route) },
+                            onNavigateToWelfare = { navController.navigate(Screen.Welfare.route) }
+                        )
+                        Screen.Members -> MembersScreen(
+                            chamaId = chamaId,
+                            onAddMember = { navController.navigate(Screen.AddMember.route) },
+                            onMemberClick = { navController.navigate(Screen.MemberDetail.createRoute(it)) }
+                        )
+                        Screen.Contributions -> ContributionsScreen(chamaId = chamaId)
+                        Screen.Loans -> LoansScreen(
+                            chamaId = chamaId,
+                            onApplyLoan = { navController.navigate(Screen.AddLoan.route) },
+                            onLoanClick = { navController.navigate(Screen.LoanDetail.createRoute(it)) }
+                        )
+                        Screen.Meetings -> MeetingsScreen(chamaId = chamaId)
+                        else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Screen ${bottomNavItems[page].label}") }
+                    }
+                }
             }
 
-            // ── Detail screens ────────────────────────────────────────────────
             composable(Screen.AddMember.route) {
                 AddMemberScreen(
                     chamaId = chamaId,
@@ -368,8 +367,6 @@ fun MainApp(
                     onBack = { navController.popBackStack() },
                     onLogout = onLogout,
                     userName = userName,
-                    userEmail = "", 
-                    userPhone = "",
                     userRole = userRole,
                     chamName = chamaName
                 )
@@ -408,8 +405,6 @@ fun MainApp(
     }
 }
 
-// ─── Placeholder (only LoanDetail left) ──────────────────────────────────────
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlaceholderScreen(title: String, onBack: () -> Unit) {
@@ -418,12 +413,12 @@ private fun PlaceholderScreen(title: String, onBack: () -> Unit) {
             TopAppBar(
                 title = { Text(title, fontWeight = FontWeight.Bold, color = Color.White) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ChamaBlue)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Primary)
             )
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-            Text("$title — coming soon", color = ChamaTextSecondary)
+            Text("$title — coming soon", color = TextSecondary, textAlign = TextAlign.Center)
         }
     }
 }

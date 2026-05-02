@@ -6,15 +6,18 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,7 +43,6 @@ fun ContributionsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showSheet by remember { mutableStateOf(false) }
 
-    // Build last 6 months for selector
     val months = remember {
         (5 downTo 0).map { offset ->
             LocalDate.now().minusMonths(offset.toLong())
@@ -62,47 +64,56 @@ fun ContributionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Contributions", fontWeight = FontWeight.Bold, color = Color.White) },
+                title = { Text("Savings & Contributions", fontWeight = FontWeight.ExtraBold, color = Color.White) },
                 actions = {
                     IconButton(onClick = {}) { Icon(Icons.Outlined.FileDownload, "Export", tint = Color.White) }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ChamaGreen)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Primary)
             )
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { showSheet = true },
                 icon = { Icon(Icons.Filled.Add, null) },
-                text = { Text("Record Payment") },
-                containerColor = ChamaGreen,
-                contentColor = Color.White
+                text = { Text("Record Payment", fontWeight = FontWeight.Bold) },
+                containerColor = Secondary,
+                contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp)
             )
         },
         snackbarHost = {
             SnackbarHost(snackbarHostState) { data ->
-                Snackbar(snackbarData = data, containerColor = if (uiState.errorMessage != null) ChamaRed else ChamaGreen, contentColor = Color.White)
+                Snackbar(
+                    snackbarData = data, 
+                    containerColor = if (uiState.errorMessage != null) Error else Accent, 
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(12.dp)
+                )
             }
         },
-        containerColor = ChamaBackground
+        containerColor = Background
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
             // Month selector
-            Box(modifier = Modifier.fillMaxWidth().background(ChamaGreen)) {
-                LazyRow(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().background(Primary)) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), 
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     items(months) { month ->
                         val isSelected = month == uiState.selectedMonth
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
-                            modifier = if (!isSelected) Modifier.clickable { viewModel.changeMonth(chamaId, month) } else Modifier
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.1f),
+                            modifier = Modifier.clickable { viewModel.changeMonth(chamaId, month) }
                         ) {
                             Text(
                                 month,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) ChamaGreen else Color.White
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                color = if (isSelected) Primary else Color.White.copy(alpha = 0.7f)
                             )
                         }
                     }
@@ -111,43 +122,50 @@ fun ContributionsScreen(
 
             // Summary card
             Card(
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = ChamaSurface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp), spotColor = Accent.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface),
             ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     val progress = if (uiState.totalCount > 0) uiState.paidCount.toFloat() / uiState.totalCount else 0f
                     val expectedTotal = uiState.totalCount * defaultContributionAmount
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
-                            Text("Amount Collected", style = MaterialTheme.typography.labelSmall, color = ChamaTextSecondary)
-                            Text("KES ${"%,.0f".format(uiState.amountCollected)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = ChamaGreen)
+                            Text("Total Collected", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+                            Text("KES ${"%,.0f".format(uiState.amountCollected)}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Accent)
                         }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("Expected", style = MaterialTheme.typography.labelSmall, color = ChamaTextSecondary)
-                            Text("KES ${"%,.0f".format(expectedTotal)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Surface(color = Color(0xFFF1F5F9), shape = RoundedCornerShape(8.dp)) {
+                            Text(
+                                "Goal: KES ${"%,.0f".format(expectedTotal)}", 
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall, 
+                                fontWeight = FontWeight.Bold,
+                                color = Primary
+                            )
                         }
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("${uiState.paidCount} of ${uiState.totalCount} paid", style = MaterialTheme.typography.labelSmall, color = ChamaTextSecondary)
-                            Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ChamaGreen)
+                            Text("${uiState.paidCount} of ${uiState.totalCount} members paid", style = MaterialTheme.typography.bodySmall, color = TextSecondary, fontWeight = FontWeight.Medium)
+                            Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.ExtraBold, color = Accent)
                         }
                         LinearProgressIndicator(
                             progress = { progress },
-                            modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
-                            color = ChamaGreen,
-                            trackColor = ChamaOutline
+                            modifier = Modifier.fillMaxWidth().height(10.dp).clip(CircleShape),
+                            color = Accent,
+                            trackColor = Color(0xFFF1F5F9)
                         )
                     }
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SummaryPill("Paid", uiState.paidCount, ChamaGreen, Modifier.weight(1f))
-                        SummaryPill("Partial", uiState.partialCount, ChamaOrange, Modifier.weight(1f))
-                        SummaryPill("Overdue", uiState.overdueCount, ChamaRed, Modifier.weight(1f))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SummaryPill("Paid", uiState.paidCount, Color(0xFFDCFCE7), Color(0xFF059669), Modifier.weight(1f))
+                        SummaryPill("Partial", uiState.partialCount, Color(0xFFFFEDD5), Color(0xFFD97706), Modifier.weight(1f))
+                        SummaryPill("Overdue", uiState.overdueCount, Color(0xFFFEE2E2), Color(0xFFDC2626), Modifier.weight(1f))
                     }
                 }
             }
@@ -155,38 +173,53 @@ fun ContributionsScreen(
             // Tabs
             TabRow(
                 selectedTabIndex = uiState.selectedTabIndex,
-                containerColor = ChamaSurface,
-                contentColor = ChamaGreen,
-                modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(12.dp))
+                containerColor = Color(0xFFF1F5F9),
+                contentColor = Secondary,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[uiState.selectedTabIndex]),
+                        color = Secondary,
+                        height = 3.dp
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(12.dp)),
+                divider = {}
             ) {
                 tabs.forEachIndexed { index, tab ->
                     Tab(
                         selected = uiState.selectedTabIndex == index,
                         onClick = { viewModel.setTab(index) },
-                        text = { Text(tab, style = MaterialTheme.typography.labelMedium, fontWeight = if (uiState.selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal) }
+                        text = { 
+                            Text(
+                                tab, 
+                                style = MaterialTheme.typography.labelLarge, 
+                                fontWeight = if (uiState.selectedTabIndex == index) FontWeight.ExtraBold else FontWeight.Bold,
+                                color = if (uiState.selectedTabIndex == index) Secondary else TextSecondary
+                            ) 
+                        }
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             when {
                 uiState.isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ChamaGreen)
+                    CircularProgressIndicator(color = Secondary)
                 }
                 uiState.filteredContributions.isEmpty() -> EmptyState(
                     icon = Icons.Outlined.Savings,
-                    title = "No contributions",
-                    subtitle = "No records for this filter"
+                    title = "No records found",
+                    subtitle = "There are no contribution records for this selection"
                 )
                 else -> LazyColumn(
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(uiState.filteredContributions, key = { it.id }) { contribution ->
                         ContributionRow(contribution = contribution)
                     }
-                    item { Spacer(modifier = Modifier.height(80.dp)) }
+                    item { Spacer(modifier = Modifier.height(100.dp)) }
                 }
             }
         }
@@ -204,14 +237,11 @@ fun ContributionsScreen(
 }
 
 @Composable
-private fun SummaryPill(label: String, count: Int, color: Color, modifier: Modifier = Modifier) {
-    Surface(shape = RoundedCornerShape(8.dp), color = color.copy(alpha = 0.1f), modifier = modifier) {
-        Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(count.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
-            Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+private fun SummaryPill(label: String, count: Int, bgColor: Color, textColor: Color, modifier: Modifier = Modifier) {
+    Surface(shape = RoundedCornerShape(12.dp), color = bgColor, modifier = modifier) {
+        Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(count.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = textColor)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = textColor, fontWeight = FontWeight.Bold)
         }
     }
 }
-
-private fun Modifier.clickable(onClick: () -> Unit): Modifier =
-    this.then(Modifier.clickable { onClick() })
