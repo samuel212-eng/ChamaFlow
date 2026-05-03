@@ -333,3 +333,57 @@ class WelfareRepository @Inject constructor(private val db: FirebaseFirestore) {
         AuthResult.Success(Unit)
     } catch (e: Exception) { AuthResult.Error("Failed to record: ${e.message}") }
 }
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
+@Singleton
+class ChatRepository @Inject constructor(private val db: FirebaseFirestore) {
+    private fun col(chamaId: String) = db.collection("chamas").document(chamaId).collection("messages")
+
+    fun getMessagesFlow(chamaId: String): Flow<List<ChatMessage>> = callbackFlow {
+        val l = col(chamaId).orderBy("timestamp", Query.Direction.ASCENDING).limitToLast(100)
+            .addSnapshotListener { snap, e ->
+                if (e != null) { close(e); return@addSnapshotListener }
+                trySend(snap?.documents?.mapNotNull { it.toObject(ChatMessage::class.java)?.copy(id = it.id) } ?: emptyList())
+            }
+        awaitClose { l.remove() }
+    }
+
+    suspend fun sendMessage(chamaId: String, message: ChatMessage): FirestoreResult<Unit> = try {
+        val ref = col(chamaId).document()
+        ref.set(message.copy(id = ref.id)).await()
+        AuthResult.Success(Unit)
+    } catch (e: Exception) { AuthResult.Error("Failed to send: ${e.message}") }
+}
+
+// ── Marketplace ───────────────────────────────────────────────────────────────
+
+@Singleton
+class MarketplaceRepository @Inject constructor(private val db: FirebaseFirestore) {
+    private fun col(chamaId: String) = db.collection("chamas").document(chamaId).collection("marketplace")
+
+    fun getListingsFlow(chamaId: String): Flow<List<MarketplaceListing>> = callbackFlow {
+        val l = col(chamaId).orderBy("timestamp", Query.Direction.DESCENDING)
+            .addSnapshotListener { snap, e ->
+                if (e != null) { close(e); return@addSnapshotListener }
+                trySend(snap?.documents?.mapNotNull { it.toObject(MarketplaceListing::class.java)?.copy(id = it.id) } ?: emptyList())
+            }
+        awaitClose { l.remove() }
+    }
+
+    suspend fun createListing(chamaId: String, listing: MarketplaceListing): FirestoreResult<Unit> = try {
+        val ref = col(chamaId).document()
+        ref.set(listing.copy(id = ref.id)).await()
+        AuthResult.Success(Unit)
+    } catch (e: Exception) { AuthResult.Error("Failed to create listing: ${e.message}") }
+
+    suspend fun markAsSold(chamaId: String, listingId: String): FirestoreResult<Unit> = try {
+        col(chamaId).document(listingId).update("isSold", true).await()
+        AuthResult.Success(Unit)
+    } catch (e: Exception) { AuthResult.Error("Failed to update listing: ${e.message}") }
+
+    suspend fun deleteListing(chamaId: String, listingId: String): FirestoreResult<Unit> = try {
+        col(chamaId).document(listingId).delete().await()
+        AuthResult.Success(Unit)
+    } catch (e: Exception) { AuthResult.Error("Failed to delete listing: ${e.message}") }
+}

@@ -11,7 +11,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -50,6 +52,8 @@ fun DashboardScreen(
     onNavigateToInvestments: () -> Unit = {},
     onNavigateToMerryGoRound: () -> Unit = {},
     onNavigateToWelfare: () -> Unit = {},
+    onNavigateToChat: () -> Unit = {},
+    onNavigateToMarketplace: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -89,6 +93,11 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    if (chamaId != "PERSONAL") {
+                        IconButton(onClick = onNavigateToChat) {
+                            Icon(Icons.AutoMirrored.Outlined.Chat, "Group Chat", tint = Color.White)
+                        }
+                    }
                     if (userRole == "ADMIN" && chamaId != "PERSONAL") {
                         IconButton(onClick = {
                             val sendIntent: Intent = Intent().apply {
@@ -165,7 +174,10 @@ fun DashboardScreen(
                     onMeeting = onNavigateToMeetings,
                     onInvestments = onNavigateToInvestments,
                     onMerryGoRound = onNavigateToMerryGoRound,
-                    onWelfare = onNavigateToWelfare
+                    onWelfare = onNavigateToWelfare,
+                    onChat = onNavigateToChat,
+                    onMarketplace = onNavigateToMarketplace,
+                    showChat = chamaId != "PERSONAL"
                 )
             }
 
@@ -268,14 +280,30 @@ private fun InviteCodeCard(code: String) {
 }
 
 @Composable
-private fun QuickActionsRow(onContribute: () -> Unit, onLoan: () -> Unit, onReport: () -> Unit, onMeeting: () -> Unit, onInvestments: () -> Unit, onMerryGoRound: () -> Unit, onWelfare: () -> Unit) {
-    val actions = listOf(
+private fun QuickActionsRow(
+    onContribute: () -> Unit,
+    onLoan: () -> Unit,
+    onReport: () -> Unit,
+    onMeeting: () -> Unit,
+    onInvestments: () -> Unit,
+    onMerryGoRound: () -> Unit,
+    onWelfare: () -> Unit,
+    onChat: () -> Unit,
+    onMarketplace: () -> Unit,
+    showChat: Boolean
+) {
+    val actions = mutableListOf(
         Triple(Icons.Filled.Add, "Save", onContribute),
         Triple(Icons.Filled.RequestPage, "Loan", onLoan),
         Triple(Icons.AutoMirrored.Filled.TrendingUp, "Invest", onInvestments),
         Triple(Icons.Filled.VolunteerActivism, "Welfare", onWelfare),
         Triple(Icons.Filled.Autorenew, "Merry-Go", onMerryGoRound),
+        Triple(Icons.Filled.Storefront, "Market", onMarketplace),
     )
+    if (showChat) {
+        actions.add(Triple(Icons.AutoMirrored.Filled.Chat, "Chat", onChat))
+    }
+
     LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(actions) { (icon, label, action) ->
             Column(

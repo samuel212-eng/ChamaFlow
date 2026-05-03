@@ -35,11 +35,14 @@ import com.chamaflow.ui.screens.auth.OtpVerificationScreen
 import com.chamaflow.ui.screens.auth.RegisterScreen
 import com.chamaflow.ui.screens.chama.ChamaSelectionScreen
 import com.chamaflow.ui.screens.chama.CreateChamaScreen
+import com.chamaflow.ui.screens.chat.ChatScreen
 import com.chamaflow.ui.screens.contributions.ContributionsScreen
 import com.chamaflow.ui.screens.dashboard.DashboardScreen
 import com.chamaflow.ui.screens.investments.InvestmentsScreen
 import com.chamaflow.ui.screens.loans.LoanApplicationScreen
 import com.chamaflow.ui.screens.loans.LoansScreen
+import com.chamaflow.ui.screens.marketplace.MarketplaceDetailScreen
+import com.chamaflow.ui.screens.marketplace.MarketplaceScreen
 import com.chamaflow.ui.screens.meetings.MeetingsScreen
 import com.chamaflow.ui.screens.members.AddMemberScreen
 import com.chamaflow.ui.screens.members.MemberProfileScreen
@@ -308,7 +311,9 @@ fun MainApp(
                             onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
                             onNavigateToInvestments = { navController.navigate(Screen.Investments.route) },
                             onNavigateToMerryGoRound = { navController.navigate(Screen.MerryGoRound.route) },
-                            onNavigateToWelfare = { navController.navigate(Screen.Welfare.route) }
+                            onNavigateToWelfare = { navController.navigate(Screen.Welfare.route) },
+                            onNavigateToChat = { navController.navigate(Screen.Chat.route) },
+                            onNavigateToMarketplace = { navController.navigate(Screen.Marketplace.route) }
                         )
                         Screen.Members -> MembersScreen(
                             chamaId = chamaId,
@@ -399,6 +404,33 @@ fun MainApp(
                     chamaId = chamaId,
                     userRole = userRole,
                     onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Chat.route) {
+                ChatScreen(
+                    chamaId = chamaId,
+                    userId = userId,
+                    userName = userName,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Marketplace.route) {
+                MarketplaceScreen(
+                    chamaId = chamaId,
+                    userId = userId,
+                    userName = userName,
+                    onBack = { navController.popBackStack() },
+                    onListingClick = { navController.navigate(Screen.MarketplaceDetail.createRoute(it)) }
+                )
+            }
+            composable(Screen.MarketplaceDetail.route) { back ->
+                MarketplaceDetailScreen(
+                    listingId = back.arguments?.getString("listingId") ?: "",
+                    onBack = { navController.popBackStack() },
+                    onContactSeller = { sellerId, sellerName ->
+                        // In a real app, this would open a direct chat
+                        navController.navigate(Screen.Chat.route)
+                    }
                 )
             }
         }
