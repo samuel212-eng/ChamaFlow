@@ -1,17 +1,22 @@
 package com.chamaflow.ui.screens.marketplace
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,9 +50,21 @@ fun MarketplaceScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showAddListing by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(chamaId) {
         viewModel.loadListings(chamaId)
+    }
+
+    LaunchedEffect(uiState.successMessage, uiState.errorMessage) {
+        uiState.successMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessages()
+        }
+        uiState.errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessages()
+        }
     }
 
     Scaffold(
@@ -74,7 +92,8 @@ fun MarketplaceScreen(
             ) {
                 Icon(Icons.Default.Add, "Add Listing")
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             CategoryTabs(
@@ -114,8 +133,9 @@ fun MarketplaceScreen(
 
         if (showAddListing) {
             AddListingDialog(
+                isUploading = uiState.isUploading,
                 onDismiss = { showAddListing = false },
-                onSave = { title, desc, price, cat ->
+                onSave = { title, desc, price, cat, uris ->
                     val newListing = MarketplaceListing(
                         chamaId = chamaId,
                         sellerId = userId,
@@ -125,7 +145,7 @@ fun MarketplaceScreen(
                         price = price.toDoubleOrNull() ?: 0.0,
                         category = cat
                     )
-                    viewModel.createListing(chamaId, newListing)
+                    viewModel.createListing(chamaId, newListing, uris)
                     showAddListing = false
                 }
             )
@@ -176,7 +196,7 @@ fun ListingCard(listing: MarketplaceListing, onClick: () -> Unit) {
     ) {
         Column {
             AsyncImage(
-                model = listing.imageUrl ?: "https://via.placeholder.com/150",
+                model = listing.imageUrls.firstOrNull() ?: "https://via.placeholder.com/150",
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -192,7 +212,7 @@ fun ListingCard(listing: MarketplaceListing, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "KES ${listing.price}",
+                    text = "KES ${"%,.0f".format(listing.price)}",
                     color = ChamaBlue,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp
@@ -211,20 +231,87 @@ fun ListingCard(listing: MarketplaceListing, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddListingDialog(
+    isUploading: Boolean,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, MarketplaceCategory) -> Unit
+    onSave: (String, String, String, MarketplaceCategory, List<Uri>) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var desc by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(MarketplaceCategory.GOODS) }
     var expanded by remember { mutableStateOf(false) }
+    var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(),
+        onResult = { uris -> selectedImageUris = uris }
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Post New Listing") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Multi-Image Preview/Picker
+                if (selectedImageUris.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.LightGray.copy(alpha = 0.3f))
+                            .clickable {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.AddPhotoAlternate, null, modifier = Modifier.size(40.dp), tint = Color.Gray)
+                            Text("Add Photos", color = Color.Gray)
+                        }
+                    }
+                } else {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(120.dp)
+                    ) {
+                        items(selectedImageUris) { uri ->
+                            Box {
+                                AsyncImage(
+                                    model = uri,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                                IconButton(
+                                    onClick = { selectedImageUris = selectedImageUris - uri },
+                                    modifier = Modifier.align(Alignment.TopEnd).size(24.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                ) {
+                                    Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .size(120.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.LightGray.copy(alpha = 0.3f))
+                                    .clickable {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Add, null, tint = Color.Gray)
+                            }
+                        }
+                    }
+                }
+
                 OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = desc, onValueChange = { desc = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth().height(100.dp))
                 OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Price (KES)") }, modifier = Modifier.fillMaxWidth())
@@ -260,10 +347,14 @@ fun AddListingDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onSave(title, desc, price, category) },
-                enabled = title.isNotBlank() && price.isNotBlank()
+                onClick = { onSave(title, desc, price, category, selectedImageUris) },
+                enabled = title.isNotBlank() && price.isNotBlank() && !isUploading
             ) {
-                Text("Post Listing")
+                if (isUploading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                } else {
+                    Text("Post Listing")
+                }
             }
         },
         dismissButton = {

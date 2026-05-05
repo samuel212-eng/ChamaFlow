@@ -3,6 +3,7 @@ package com.chamaflow.ui.screens.merrygoround
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,13 +21,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.chamaflow.data.models.*
 import com.chamaflow.ui.components.*
 import com.chamaflow.ui.theme.*
+import com.chamaflow.ui.viewmodel.MerryGoRoundUiState
 import com.chamaflow.ui.viewmodel.MerryGoRoundViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,6 +41,7 @@ fun MerryGoRoundScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showCreateSheet by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(chamaId) { viewModel.loadMerryGoRoundData(chamaId) }
 
@@ -93,87 +96,26 @@ fun MerryGoRoundScreen(
                 val currentReceiverId = mgr.rotationOrder.getOrNull(mgr.currentIndex)
                 val currentReceiver = uiState.members.find { it.id == currentReceiverId }
 
-                // Premium Status Card
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                        .shadow(elevation = 16.dp, shape = RoundedCornerShape(28.dp), spotColor = Primary.copy(alpha = 0.4f)),
-                    shape = RoundedCornerShape(28.dp),
-                ) {
-                    Box(modifier = Modifier.background(Brush.linearGradient(PremiumGradient))) {
-                        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Icon(Icons.Filled.Stars, null, tint = Warning, modifier = Modifier.size(20.dp))
-                                Text("NEXT RECIPIENT", style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                            }
-                            
-                            Column {
-                                Text(
-                                    currentReceiver?.fullName ?: "Member Not Assigned", 
-                                    style = MaterialTheme.typography.headlineSmall, 
-                                    fontWeight = FontWeight.ExtraBold, 
-                                    color = Color.White,
-                                    letterSpacing = 0.5.sp
-                                )
-                                Text(
-                                    "Is scheduled to receive the pool", 
-                                    style = MaterialTheme.typography.bodySmall, 
-                                    color = Color.White.copy(alpha = 0.6f)
-                                )
-                            }
-                            
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Column {
-                                    Text("Pool Total", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
-                                    Text("KES ${"%,.0f".format(mgr.totalPool)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Accent)
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("Each Contributes", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
-                                    Text("KES ${"%,.0f".format(mgr.amountPerMember)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                }
-                            }
-
-                            if (userRole == "ADMIN") {
-                                Button(
-                                    onClick = { 
-                                        if (currentReceiver != null) {
-                                            viewModel.recordPayout(chamaId, mgr.id, currentReceiver.id, currentReceiver.fullName, mgr.totalPool)
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f)),
-                                    shape = RoundedCornerShape(12.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
-                                ) {
-                                    Icon(Icons.Filled.CheckCircle, null, tint = Color.White)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Confirm Payout", fontWeight = FontWeight.Bold, color = Color.White)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                SectionHeader(title = "Rotation Schedule", actionLabel = "Order", onAction = { /* Show order info */ })
-
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 100.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    itemsIndexed(mgr.rotationOrder) { index, memberId ->
-                        val member = uiState.members.find { it.id == memberId }
-                        val isCurrent = index == mgr.currentIndex
-                        val isPast = index < mgr.currentIndex
-                        
-                        RotationItem(
-                            name = member?.fullName ?: "Unknown",
-                            index = index + 1,
-                            isCurrent = isCurrent,
-                            isPast = isPast
+                 TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Color.Transparent,
+                    contentColor = Primary,
+                    divider = {},
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            color = Secondary
                         )
                     }
+                ) {
+                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Rotation") })
+                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Payout History") })
+                }
+
+                if (selectedTab == 0) {
+                    RotationContent(mgr, currentReceiver, userRole, chamaId, uiState, viewModel)
+                } else {
+                    PayoutHistoryContent(uiState.payouts)
                 }
             }
         }
@@ -187,6 +129,147 @@ fun MerryGoRoundScreen(
                 viewModel.createMerryGoRound(chamaId, amount, order)
             }
         )
+    }
+}
+
+@Composable
+fun RotationContent(
+    mgr: MerryGoRound,
+    currentReceiver: Member?,
+    userRole: String,
+    chamaId: String,
+    uiState: MerryGoRoundUiState,
+    viewModel: MerryGoRoundViewModel
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 100.dp)
+    ) {
+        item {
+            // Premium Status Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .shadow(elevation = 16.dp, shape = RoundedCornerShape(28.dp), spotColor = Primary.copy(alpha = 0.4f)),
+                shape = RoundedCornerShape(28.dp),
+            ) {
+                Box(modifier = Modifier.background(Brush.linearGradient(PremiumGradient))) {
+                    Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Icon(Icons.Filled.Stars, null, tint = Warning, modifier = Modifier.size(20.dp))
+                            Text("NEXT RECIPIENT", style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
+                        }
+                        
+                        Column {
+                            Text(
+                                currentReceiver?.fullName ?: "Member Not Assigned", 
+                                style = MaterialTheme.typography.headlineSmall, 
+                                fontWeight = FontWeight.ExtraBold, 
+                                color = Color.White,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                "Is scheduled to receive the pool", 
+                                style = MaterialTheme.typography.bodySmall, 
+                                color = Color.White.copy(alpha = 0.6f)
+                            )
+                        }
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text("Pool Total", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                                Text("KES ${"%,.0f".format(mgr.totalPool)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Accent)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Each Contributes", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                                Text("KES ${"%,.0f".format(mgr.amountPerMember)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                            }
+                        }
+
+                        if (userRole == "ADMIN") {
+                            Button(
+                                onClick = { 
+                                    if (currentReceiver != null) {
+                                        viewModel.recordPayout(chamaId, mgr.id, currentReceiver.id, currentReceiver.fullName, mgr.totalPool)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f)),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
+                            ) {
+                                Icon(Icons.Filled.CheckCircle, null, tint = Color.White)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Confirm Payout", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            SectionHeader(title = "Rotation Schedule", actionLabel = "Order", onAction = { })
+        }
+
+        itemsIndexed(mgr.rotationOrder) { index, memberId ->
+            val member = uiState.members.find { it.id == memberId }
+            val isCurrent = index == mgr.currentIndex
+            val isPast = index < mgr.currentIndex
+            
+            RotationItem(
+                name = member?.fullName ?: "Unknown",
+                index = index + 1,
+                isCurrent = isCurrent,
+                isPast = isPast
+            )
+        }
+    }
+}
+
+@Composable
+fun PayoutHistoryContent(payouts: List<MerryGoRoundPayout>) {
+    if (payouts.isEmpty()) {
+        EmptyState(Icons.Outlined.History, "No Payouts Yet", "Confirmed payouts will appear here in chronological order.")
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(payouts) { payout ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier.size(44.dp).clip(CircleShape).background(ChamaGreenLight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.Check, null, tint = ChamaGreen)
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(payout.memberName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                            Text("${payout.datePaid} · ${payout.month}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        }
+                        Text(
+                            "KES ${"%,.0f".format(payout.amount)}",
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Primary,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

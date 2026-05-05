@@ -8,7 +8,7 @@ data class MarketplaceListing(
     val title: String = "",
     val description: String = "",
     val price: Double = 0.0,
-    val imageUrl: String? = null,
+    val imageUrls: List<String> = emptyList(),
     val category: MarketplaceCategory = MarketplaceCategory.OTHER,
     val timestamp: Long = System.currentTimeMillis(),
     val isSold: Boolean = false

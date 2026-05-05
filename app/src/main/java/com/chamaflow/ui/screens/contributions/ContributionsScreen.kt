@@ -66,7 +66,7 @@ fun ContributionsScreen(
             TopAppBar(
                 title = { Text("Savings & Contributions", fontWeight = FontWeight.ExtraBold, color = Color.White) },
                 actions = {
-                    IconButton(onClick = {}) { Icon(Icons.Outlined.FileDownload, "Export", tint = Color.White) }
+                    IconButton(onClick = { /* Export logic */ }) { Icon(Icons.Outlined.FileDownload, "Export", tint = Color.White) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Primary)
             )

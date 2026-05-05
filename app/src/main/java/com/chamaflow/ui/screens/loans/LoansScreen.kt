@@ -38,6 +38,7 @@ fun LoansScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val tabs = listOf("Active", "Pending", "Repaid")
+    var selectedLoanForRepayment by remember { mutableStateOf<Loan?>(null) }
 
     LaunchedEffect(chamaId) { viewModel.loadLoans(chamaId) }
 
@@ -68,7 +69,7 @@ fun LoansScreen(
                 Snackbar(snackbarData = data, containerColor = if (uiState.errorMessage != null) ChamaRed else ChamaGreen, contentColor = Color.White)
             }
         },
-        containerColor = ChamaBackground
+        containerColor = Background
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
@@ -102,7 +103,7 @@ fun LoansScreen(
             // Tabs
             TabRow(
                 selectedTabIndex = uiState.selectedTabIndex,
-                containerColor = ChamaSurface,
+                containerColor = Surface,
                 contentColor = loanPurple,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp).clip(RoundedCornerShape(12.dp))
             ) {
@@ -128,7 +129,11 @@ fun LoansScreen(
                                 onApprove = { viewModel.approveLoan(chamaId, loan.id) },
                                 onReject  = { viewModel.rejectLoan(chamaId, loan.id) }
                             )
-                            else -> LoanProgressCard(loan = loan, onClick = { onLoanClick(loan.id) })
+                            else -> LoanProgressCard(
+                                loan = loan, 
+                                onClick = { onLoanClick(loan.id) },
+                                onRepay = { selectedLoanForRepayment = loan }
+                            )
                         }
                     }
                     item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -136,6 +141,48 @@ fun LoansScreen(
             }
         }
     }
+
+    if (selectedLoanForRepayment != null) {
+        RepaymentDialog(
+            loan = selectedLoanForRepayment!!,
+            onDismiss = { selectedLoanForRepayment = null },
+            onConfirm = { amount ->
+                viewModel.recordRepayment(chamaId, selectedLoanForRepayment!!.id, amount)
+                selectedLoanForRepayment = null
+            }
+        )
+    }
+}
+
+@Composable
+fun RepaymentDialog(loan: Loan, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
+    var amount by remember { mutableStateOf(loan.monthlyInstallment.toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Record Repayment") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Enter repayment amount for ${loan.memberName}")
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text("Amount (KES)") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(amount.toDoubleOrNull() ?: 0.0) }) {
+                Text("Confirm")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -146,7 +193,7 @@ private fun PendingLoanCard(loan: Loan, onApprove: () -> Unit, onReject: () -> U
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = ChamaSurface),
+        colors = CardDefaults.cardColors(containerColor = Surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -155,7 +202,7 @@ private fun PendingLoanCard(loan: Loan, onApprove: () -> Unit, onReject: () -> U
                     MemberAvatar(name = loan.memberName, size = 38.dp, backgroundColor = ChamaGoldLight, textColor = ChamaGold)
                     Column {
                         Text(loan.memberName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text("Requested: ${loan.disbursedDate}", style = MaterialTheme.typography.bodySmall, color = ChamaTextSecondary)
+                        Text("Requested: ${loan.disbursedDate}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     }
                 }
                 StatusChip(status = "PENDING")
@@ -167,10 +214,10 @@ private fun PendingLoanCard(loan: Loan, onApprove: () -> Unit, onReject: () -> U
                 LoanDetailItem("Period", "${loan.repaymentPeriodMonths} months")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { showRejectDialog = true }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = ChamaRed), border = ButtonDefaults.outlinedButtonBorder.copy(brush = SolidColor(ChamaRed))) {
+                OutlinedButton(onClick = { showRejectDialog = true }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Error), border = ButtonDefaults.outlinedButtonBorder.copy(brush = SolidColor(Error))) {
                     Icon(Icons.Filled.Close, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Reject")
                 }
-                Button(onClick = { showApproveDialog = true }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = ChamaGreen)) {
+                Button(onClick = { showApproveDialog = true }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = Accent)) {
                     Icon(Icons.Filled.Check, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Approve")
                 }
             }
@@ -182,7 +229,7 @@ private fun PendingLoanCard(loan: Loan, onApprove: () -> Unit, onReject: () -> U
             onDismissRequest = { showApproveDialog = false },
             title = { Text("Approve Loan") },
             text = { Text("Approve KES ${"%,.0f".format(loan.amount)} for ${loan.memberName}?\nMonthly installment: KES ${"%,.0f".format(loan.monthlyInstallment)}") },
-            confirmButton = { Button(onClick = { onApprove(); showApproveDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = ChamaGreen)) { Text("Approve") } },
+            confirmButton = { Button(onClick = { onApprove(); showApproveDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = Accent)) { Text("Approve") } },
             dismissButton = { TextButton(onClick = { showApproveDialog = false }) { Text("Cancel") } }
         )
     }
@@ -191,7 +238,7 @@ private fun PendingLoanCard(loan: Loan, onApprove: () -> Unit, onReject: () -> U
             onDismissRequest = { showRejectDialog = false },
             title = { Text("Reject Loan") },
             text = { Text("Reject loan request from ${loan.memberName}?") },
-            confirmButton = { Button(onClick = { onReject(); showRejectDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = ChamaRed)) { Text("Reject") } },
+            confirmButton = { Button(onClick = { onReject(); showRejectDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = Error)) { Text("Reject") } },
             dismissButton = { TextButton(onClick = { showRejectDialog = false }) { Text("Cancel") } }
         )
     }
@@ -200,7 +247,7 @@ private fun PendingLoanCard(loan: Loan, onApprove: () -> Unit, onReject: () -> U
 @Composable
 private fun LoanDetailItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = ChamaTextSecondary)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
     }
 }

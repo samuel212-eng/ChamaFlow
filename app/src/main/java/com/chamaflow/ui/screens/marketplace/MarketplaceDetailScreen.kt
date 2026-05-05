@@ -2,6 +2,8 @@ package com.chamaflow.ui.screens.marketplace
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,7 +13,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -89,7 +90,11 @@ fun MarketplaceDetailScreen(
     ) { padding ->
         if (listing == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Listing not found.")
+                if (uiState.isLoading) {
+                    CircularProgressIndicator()
+                } else {
+                    Text("Listing not found.")
+                }
             }
         } else {
             Column(
@@ -98,14 +103,49 @@ fun MarketplaceDetailScreen(
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
             ) {
-                AsyncImage(
-                    model = listing.imageUrl ?: "https://via.placeholder.com/600",
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp),
-                    contentScale = ContentScale.Crop
-                )
+                if (listing.imageUrls.isNotEmpty()) {
+                    val pagerState = rememberPagerState(pageCount = { listing.imageUrls.size })
+                    Box {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp)
+                        ) { page ->
+                            AsyncImage(
+                                model = listing.imageUrls[page],
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        if (listing.imageUrls.size > 1) {
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(16.dp),
+                                color = Color.Black.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "${pagerState.currentPage + 1} / ${listing.imageUrls.size}",
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    AsyncImage(
+                        model = "https://via.placeholder.com/600",
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                }
 
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
@@ -115,7 +155,7 @@ fun MarketplaceDetailScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "KES ${listing.price}",
+                        text = "KES ${"%,.0f".format(listing.price)}",
                         style = MaterialTheme.typography.titleLarge,
                         color = ChamaBlue,
                         fontWeight = FontWeight.Bold
@@ -127,7 +167,7 @@ fun MarketplaceDetailScreen(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
-                            text = listing.category.name,
+                            text = listing.category.name.lowercase().replaceFirstChar { it.uppercase() },
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelMedium,
                             color = ChamaBlue

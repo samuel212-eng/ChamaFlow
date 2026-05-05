@@ -17,10 +17,10 @@ class MeetingsRepository @Inject constructor(private val db: FirebaseFirestore) 
     private fun col(chamaId: String) = db.collection("chamas").document(chamaId).collection("meetings")
 
     fun getMeetingsFlow(chamaId: String): Flow<List<Meeting>> = callbackFlow {
-        val l = col(chamaId).orderBy("date", Query.Direction.DESCENDING)
-            .addSnapshotListener { snap, e ->
+        val l = col(chamaId).addSnapshotListener { snap, e ->
                 if (e != null) { close(e); return@addSnapshotListener }
-                trySend(snap?.documents?.mapNotNull { it.toObject(Meeting::class.java)?.copy(id = it.id) } ?: emptyList())
+                // Sort in memory to avoid index requirements
+                trySend(snap?.documents?.mapNotNull { it.toObject(Meeting::class.java)?.copy(id = it.id) }?.sortedByDescending { it.date } ?: emptyList())
             }
         awaitClose { l.remove() }
     }

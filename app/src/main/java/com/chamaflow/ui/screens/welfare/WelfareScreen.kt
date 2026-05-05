@@ -22,7 +22,9 @@ import com.chamaflow.data.models.*
 import com.chamaflow.ui.components.*
 import com.chamaflow.ui.theme.*
 import com.chamaflow.ui.viewmodel.WelfareViewModel
+import com.chamaflow.ui.viewmodel.currentMonth
 import java.time.LocalDate
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,7 +86,7 @@ fun WelfareScreen(
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = ChamaBackground
+        containerColor = Background
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             // Welfare Balance Card
@@ -113,7 +115,7 @@ fun WelfareScreen(
 
             TabRow(
                 selectedTabIndex = selectedTab,
-                containerColor = ChamaSurface,
+                containerColor = Surface,
                 contentColor = ChamaOrange,
                 modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(12.dp))
             ) {
@@ -202,13 +204,13 @@ fun WelfareItemRow(title: String, subtitle: String, amount: Double, isPositive: 
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = ChamaSurface),
+        colors = CardDefaults.cardColors(containerColor = Surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = ChamaTextSecondary)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
             Text(
                 "${if (isPositive) "+" else "-"} KES ${"%,.0f".format(amount)}",
@@ -257,7 +259,7 @@ fun WelfareContributionSheet(members: List<Member>, defaultAmount: Double, onDis
                             memberName = selectedMember!!.fullName,
                             amount = amount.toDoubleOrNull() ?: 0.0,
                             date = LocalDate.now().toString(),
-                            month = LocalDate.now().month.name
+                            month = currentMonth()
                         ))
                         onDismiss()
                     }
@@ -307,7 +309,11 @@ fun WelfareDisbursementSheet(members: List<Member>, onDismiss: () -> Unit, onSav
                     FilterChip(
                         selected = category == cat,
                         onClick = { category = cat },
-                        label = { Text(cat.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                        label = { 
+                            Text(cat.name.lowercase().replaceFirstChar { 
+                                if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() 
+                            }) 
+                        }
                     )
                 }
             }

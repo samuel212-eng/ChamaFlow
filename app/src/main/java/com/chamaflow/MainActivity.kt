@@ -359,7 +359,10 @@ fun MainApp(
                 PlaceholderScreen("Loan Details") { navController.popBackStack() }
             }
             composable(Screen.Reports.route) {
-                ReportsScreen(onBack = { navController.popBackStack() })
+                ReportsScreen(
+                    chamaId = chamaId,
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable(Screen.Penalties.route) {
                 PenaltiesScreen(onBack = { navController.popBackStack() })
